@@ -1,614 +1,453 @@
-// services/NotificationService.dart (SakuRimba)
 import '../services/HiveService.dart';
 import '../services/UserService.dart';
-import '../models/Notification.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'dart:io' show Platform;
+import '../models/notification.dart' as app_notification;
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  
-  static bool _isInitialized = false;
+  static const String _notificationsBox = 'notifications';
+  static const int _maxNotifications = 500;
 
-  // Initialize notification service
+  /// Initialize notification service
   static Future<void> init() async {
     try {
-      if (_isInitialized) return;
-
       print('🔔 Initializing NotificationService...');
-
-      // Android initialization
-      const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-
-      // iOS initialization
-      const DarwinInitializationSettings initializationSettingsIOS =
-          DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-      );
-
-      const InitializationSettings initializationSettings =
-          InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsIOS,
-      );
-
-      await _flutterLocalNotificationsPlugin.initialize(
-        initializationSettings,
-        onDidReceiveNotificationResponse: _onNotificationTapped,
-      );
-
-      // Request permissions for iOS
-      if (Platform.isIOS) {
-        await _flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                IOSFlutterLocalNotificationsPlugin>()
-            ?.requestPermissions(
-              alert: true,
-              badge: true,
-              sound: true,
-            );
-      }
-
-      // Request permissions for Android 13+
-      if (Platform.isAndroid) {
-        await _flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission();
-      }
-
-      _isInitialized = true;
-      print('✅ NotificationService initialized successfully');
+      
+      // Create some sample notifications for demo
+      await _createSampleNotifications();
+      
+      print('✅ NotificationService initialized');
     } catch (e) {
       print('❌ Error initializing NotificationService: $e');
     }
   }
 
-  // Handle notification tap
-  static void _onNotificationTapped(NotificationResponse response) {
-    try {
-      print('🔔 Notification tapped: ${response.payload}');
-      
-      if (response.payload != null) {
-        final parts = response.payload!.split('|');
-        if (parts.length >= 2) {
-          final type = parts[0];
-          final id = parts[1];
-          
-          // Handle different notification types
-          switch (type) {
-            case 'rental':
-              // Navigate to rental details
-              print('📱 Navigate to rental: $id');
-              break;
-            case 'payment':
-              // Navigate to payment screen
-              print('📱 Navigate to payment: $id');
-              break;
-            case 'reminder':
-              // Navigate to reminder details
-              print('📱 Navigate to reminder: $id');
-              break;
-          }
-        }
-      }
-    } catch (e) {
-      print('❌ Error handling notification tap: $e');
-    }
-  }
-
-  // ============================================================================
-  // NOTIFICATION CREATION
-  // ============================================================================
-
-  /// Create rental-related notification
-  static Future<void> createRentalNotification({
+  /// Create a new notification
+  static Future<String?> createNotification({
     required String userId,
     required String title,
     required String message,
-    String priority = 'medium',
-    String? rentalId,
-    Map<String, dynamic>? extraData,
+    required String type,
+    Map<String, dynamic>? data,
   }) async {
     try {
-      final notificationId = HiveService.generateNotificationId();
+      final id = DateTime.now().millisecondsSinceEpoch.toString();
       
-      final notification = Notification.createRentalNotification(
-        id: notificationId,
+      final notification = app_notification.Notification(
+        id: id,
         userId: userId,
         title: title,
         message: message,
-        priority: priority,
-        data: extraData,
-        actionType: rentalId != null ? 'view_rental' : null,
-        actionData: rentalId,
-      );
-
-      // Save to Hive
-      await HiveService.saveNotification(notification);
-
-      // Show local notification
-      await _showLocalNotification(
-        notification: notification,
-        payload: 'rental|${rentalId ?? ''}',
-      );
-
-      print('✅ Rental notification created: $notificationId');
-    } catch (e) {
-      print('❌ Error creating rental notification: $e');
-    }
-  }
-
-  /// Create payment-related notification
-  static Future<void> createPaymentNotification({
-    required String userId,
-    required String title,
-    required String message,
-    String priority = 'high',
-    String? rentalId,
-    double? amount,
-    Map<String, dynamic>? extraData,
-  }) async {
-    try {
-      final notificationId = HiveService.generateNotificationId();
-      
-      Map<String, dynamic> data = extraData ?? {};
-      if (amount != null) {
-        data['amount'] = amount;
-      }
-      
-      final notification = Notification.createPaymentNotification(
-        id: notificationId,
-        userId: userId,
-        title: title,
-        message: message,
-        priority: priority,
-        data: data,
-        actionType: rentalId != null ? 'make_payment' : null,
-        actionData: rentalId,
-      );
-
-      // Save to Hive
-      await HiveService.saveNotification(notification);
-
-      // Show local notification
-      await _showLocalNotification(
-        notification: notification,
-        payload: 'payment|${rentalId ?? ''}',
-      );
-
-      print('✅ Payment notification created: $notificationId');
-    } catch (e) {
-      print('❌ Error creating payment notification: $e');
-    }
-  }
-
-  /// Create reminder notification
-  static Future<void> createReminderNotification({
-    required String userId,
-    required String title,
-    required String message,
-    String priority = 'medium',
-    String? rentalId,
-    DateTime? reminderTime,
-    Map<String, dynamic>? extraData,
-  }) async {
-    try {
-      final notificationId = HiveService.generateNotificationId();
-      
-      Map<String, dynamic> data = extraData ?? {};
-      if (reminderTime != null) {
-        data['reminderTime'] = reminderTime.toIso8601String();
-      }
-      
-      final notification = Notification.createReminderNotification(
-        id: notificationId,
-        userId: userId,
-        title: title,
-        message: message,
-        priority: priority,
-        data: data,
-        actionType: rentalId != null ? 'view_rental' : null,
-        actionData: rentalId,
-      );
-
-      // Save to Hive
-      await HiveService.saveNotification(notification);
-
-      // Show local notification
-      await _showLocalNotification(
-        notification: notification,
-        payload: 'reminder|${rentalId ?? ''}',
-      );
-
-      print('✅ Reminder notification created: $notificationId');
-    } catch (e) {
-      print('❌ Error creating reminder notification: $e');
-    }
-  }
-
-  /// Create system notification
-  static Future<void> createSystemNotification({
-    required String userId,
-    required String title,
-    required String message,
-    String priority = 'low',
-    Map<String, dynamic>? extraData,
-  }) async {
-    try {
-      final notificationId = HiveService.generateNotificationId();
-      
-      final notification = Notification.createSystemNotification(
-        id: notificationId,
-        userId: userId,
-        title: title,
-        message: message,
-        priority: priority,
-        data: extraData,
-      );
-
-      // Save to Hive
-      await HiveService.saveNotification(notification);
-
-      // Show local notification
-      await _showLocalNotification(
-        notification: notification,
-        payload: 'system|',
-      );
-
-      print('✅ System notification created: $notificationId');
-    } catch (e) {
-      print('❌ Error creating system notification: $e');
-    }
-  }
-
-  /// Create promotion notification
-  static Future<void> createPromotionNotification({
-    required String userId,
-    required String title,
-    required String message,
-    String priority = 'medium',
-    Map<String, dynamic>? extraData,
-  }) async {
-    try {
-      final notificationId = HiveService.generateNotificationId();
-      
-      final notification = Notification(
-        id: notificationId,
-        userId: userId,
-        title: title,
-        message: message,
-        type: 'promotion',
-        priority: priority,
+        type: type,
+        isRead: false,
         createdAt: DateTime.now(),
-        data: extraData,
+        data: data,
       );
 
-      // Save to Hive
-      await HiveService.saveNotification(notification);
-
-      // Show local notification
-      await _showLocalNotification(
-        notification: notification,
-        payload: 'promotion|',
-      );
-
-      print('✅ Promotion notification created: $notificationId');
+      // Get existing notifications
+      final notifications = await getAllNotifications();
+      
+      // Add new notification at the beginning
+      notifications.insert(0, notification);
+      
+      // Limit the number of notifications
+      if (notifications.length > _maxNotifications) {
+        notifications.removeRange(_maxNotifications, notifications.length);
+      }
+      
+      // Save notifications
+      await _saveNotifications(notifications);
+      
+      print('✅ Notification created: $title');
+      return id;
     } catch (e) {
-      print('❌ Error creating promotion notification: $e');
+      print('❌ Error creating notification: $e');
+      return null;
     }
   }
-
-  // ============================================================================
-  // NOTIFICATION MANAGEMENT
-  // ============================================================================
 
   /// Get all notifications for current user
-  static Future<List<Notification>> getUserNotifications() async {
+static Future<List<app_notification.Notification>> getAllNotifications() async {
     try {
       final userId = UserService.getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login.');
+      if (userId == null) return [];
+
+      final List<dynamic> notificationsData =
+          await HiveService.getSetting<List<dynamic>>(_notificationsBox) ?? [];
+
+      final List<app_notification.Notification> notifications = [];
+      for (var raw in notificationsData) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final notif = app_notification.Notification.fromMap(map);
+        if (notif.userId == userId) {
+          notifications.add(notif);
+        }
       }
 
-      return await HiveService.getNotificationsByUser(userId);
+      notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return notifications;
     } catch (e) {
-      print('❌ Error getting user notifications: $e');
+      print('❌ Error getting notifications: $e');
       return [];
     }
   }
 
-  /// Get unread notifications for current user
-  static Future<List<Notification>> getUnreadNotifications() async {
-    try {
-      final notifications = await getUserNotifications();
-      return notifications.where((notif) => !notif.isRead).toList();
-    } catch (e) {
-      print('❌ Error getting unread notifications: $e');
-      return [];
-    }
-  }
-
-  /// Get notifications by type
-  static Future<List<Notification>> getNotificationsByType(String type) async {
-    try {
-      final notifications = await getUserNotifications();
-      return notifications.where((notif) => notif.type == type).toList();
-    } catch (e) {
-      print('❌ Error getting notifications by type: $e');
-      return [];
-    }
-  }
-
-  /// Mark notification as read
-  static Future<void> markAsRead(String notificationId) async {
-    try {
-      await HiveService.markNotificationAsRead(notificationId);
-      print('✅ Notification marked as read: $notificationId');
-    } catch (e) {
-      print('❌ Error marking notification as read: $e');
-    }
-  }
-
-  /// Mark all notifications as read
-  static Future<void> markAllAsRead() async {
-    try {
-      final unreadNotifications = await getUnreadNotifications();
-      
-      for (var notification in unreadNotifications) {
-        await markAsRead(notification.id);
-      }
-      
-      print('✅ All notifications marked as read (${unreadNotifications.length})');
-    } catch (e) {
-      print('❌ Error marking all notifications as read: $e');
-    }
-  }
-
-  /// Get unread notification count
+  /// Get unread notifications count
   static Future<int> getUnreadCount() async {
     try {
-      final unreadNotifications = await getUnreadNotifications();
-      return unreadNotifications.length;
+      final notifications = await getAllNotifications();
+      return notifications.where((n) => !n.isRead).length;
     } catch (e) {
       print('❌ Error getting unread count: $e');
       return 0;
     }
   }
 
-  /// Delete notification
-  static Future<void> deleteNotification(String notificationId) async {
+  /// Mark notification as read
+  static Future<bool> markAsRead(String notificationId) async {
     try {
-      final box = await HiveService.getNotificationBox();
-      await box.delete(notificationId);
-      print('✅ Notification deleted: $notificationId');
+      final allNotifications = await _getAllNotificationsFromStorage();
+      
+      final index = allNotifications.indexWhere((n) => n.id == notificationId);
+      if (index != -1) {
+        allNotifications[index] = allNotifications[index].copyWith(isRead: true);
+        await _saveNotifications(allNotifications);
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('❌ Error marking notification as read: $e');
+      return false;
+    }
+  }
+
+  /// Mark all notifications as read for current user
+  static Future<bool> markAllAsRead() async {
+    try {
+      final userId = UserService.getCurrentUserId();
+      if (userId == null) return false;
+      
+      final allNotifications = await _getAllNotificationsFromStorage();
+      
+      bool hasChanges = false;
+      for (int i = 0; i < allNotifications.length; i++) {
+        if (allNotifications[i].userId == userId && !allNotifications[i].isRead) {
+          allNotifications[i] = allNotifications[i].copyWith(isRead: true);
+          hasChanges = true;
+        }
+      }
+      
+      if (hasChanges) {
+        await _saveNotifications(allNotifications);
+      }
+      
+      return hasChanges;
+    } catch (e) {
+      print('❌ Error marking all notifications as read: $e');
+      return false;
+    }
+  }
+
+  /// Delete a notification
+  static Future<bool> deleteNotification(String notificationId) async {
+    try {
+      final allNotifications = await _getAllNotificationsFromStorage();
+      
+      final initialLength = allNotifications.length;
+      allNotifications.removeWhere((n) => n.id == notificationId);
+      
+      if (allNotifications.length < initialLength) {
+        await _saveNotifications(allNotifications);
+        return true;
+      }
+      
+      return false;
     } catch (e) {
       print('❌ Error deleting notification: $e');
+      return false;
     }
   }
 
-  /// Clear all notifications for current user
-  static Future<void> clearAllNotifications() async {
+  /// Delete all notifications for current user
+  static Future<bool> deleteAllNotifications() async {
     try {
-      final notifications = await getUserNotifications();
-      final box = await HiveService.getNotificationBox();
+      final userId = UserService.getCurrentUserId();
+      if (userId == null) return false;
       
-      for (var notification in notifications) {
-        await box.delete(notification.id);
+      final allNotifications = await _getAllNotificationsFromStorage();
+      
+      final initialLength = allNotifications.length;
+      allNotifications.removeWhere((n) => n.userId == userId);
+      
+      if (allNotifications.length < initialLength) {
+        await _saveNotifications(allNotifications);
+        return true;
       }
       
-      print('✅ All notifications cleared (${notifications.length})');
+      return false;
     } catch (e) {
-      print('❌ Error clearing all notifications: $e');
+      print('❌ Error deleting all notifications: $e');
+      return false;
     }
   }
 
-  // ============================================================================
-  // LOCAL NOTIFICATION MANAGEMENT
-  // ============================================================================
-
-  /// Show local notification
-  static Future<void> _showLocalNotification({
-    required Notification notification,
-    String? payload,
-  }) async {
+  /// Cleanup old notifications (keep only recent ones)
+  static Future<void> cleanupOldNotifications() async {
     try {
-      if (!_isInitialized) {
-        await init();
-      }
-
-      // Determine importance based on priority
-      Importance importance;
-      Priority priority;
+      final allNotifications = await _getAllNotificationsFromStorage();
       
-      switch (notification.priority) {
-        case 'urgent':
-          importance = Importance.max;
-          priority = Priority.max;
-          break;
-        case 'high':
-          importance = Importance.high;
-          priority = Priority.high;
-          break;
-        case 'medium':
-          importance = Importance.defaultImportance;
-          priority = Priority.defaultPriority;
-          break;
-        case 'low':
-          importance = Importance.low;
-          priority = Priority.low;
-          break;
-        default:
-          importance = Importance.defaultImportance;
-          priority = Priority.defaultPriority;
+      if (allNotifications.length > _maxNotifications) {
+        // Sort by creation date and keep only the most recent
+        allNotifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final recentNotifications = allNotifications.take(_maxNotifications).toList();
+        
+        await _saveNotifications(recentNotifications);
+        
+        final removedCount = allNotifications.length - recentNotifications.length;
+        print('🧹 Cleaned up $removedCount old notifications');
       }
-
-      // Android notification details
-      final AndroidNotificationDetails androidNotificationDetails =
-          AndroidNotificationDetails(
-        'sakurimba_channel',
-        'SakuRimba Notifications',
-        channelDescription: 'Notifications for SakuRimba camping equipment rental',
-        importance: importance,
-        priority: priority,
-        icon: '@mipmap/ic_launcher',
-        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-        color: _getNotificationColor(notification.type),
-        enableVibration: true,
-        playSound: true,
-      );
-
-      // iOS notification details
-      const DarwinNotificationDetails iosNotificationDetails =
-          DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      final NotificationDetails notificationDetails = NotificationDetails(
-        android: androidNotificationDetails,
-        iOS: iosNotificationDetails,
-      );
-
-      // Generate unique ID for local notification
-      final int notificationLocalId = notification.hashCode;
-
-      await _flutterLocalNotificationsPlugin.show(
-        notificationLocalId,
-        notification.title,
-        notification.message,
-        notificationDetails,
-        payload: payload,
-      );
-
-      print('✅ Local notification shown: ${notification.title}');
     } catch (e) {
-      print('❌ Error showing local notification: $e');
+      print('❌ Error cleaning up notifications: $e');
     }
   }
 
-  /// Schedule local notification
-  static Future<void> scheduleNotification({
-    required Notification notification,
-    required DateTime scheduledTime,
-    String? payload,
-  }) async {
-    try {
-      if (!_isInitialized) {
-        await init();
-      }
-
-      final AndroidNotificationDetails androidNotificationDetails =
-          AndroidNotificationDetails(
-        'sakurimba_scheduled_channel',
-        'SakuRimba Scheduled Notifications',
-        channelDescription: 'Scheduled notifications for SakuRimba',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      );
-
-      const DarwinNotificationDetails iosNotificationDetails =
-          DarwinNotificationDetails();
-
-      final NotificationDetails notificationDetails = NotificationDetails(
-        android: androidNotificationDetails,
-        iOS: iosNotificationDetails,
-      );
-
-      final int notificationLocalId = notification.hashCode;
-
-      await _flutterLocalNotificationsPlugin.zonedSchedule(
-        notificationLocalId,
-        notification.title,
-        notification.message,
-        scheduledTime,
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
-      );
-
-      print('✅ Notification scheduled for: $scheduledTime');
-    } catch (e) {
-      print('❌ Error scheduling notification: $e');
-    }
-  }
-
-  /// Cancel scheduled notification
-  static Future<void> cancelScheduledNotification(int notificationId) async {
-    try {
-      await _flutterLocalNotificationsPlugin.cancel(notificationId);
-      print('✅ Scheduled notification cancelled: $notificationId');
-    } catch (e) {
-      print('❌ Error cancelling scheduled notification: $e');
-    }
-  }
-
-  /// Cancel all notifications
+  /// Cancel all notifications (for app shutdown)
   static Future<void> cancelAllNotifications() async {
     try {
-      await _flutterLocalNotificationsPlugin.cancelAll();
-      print('✅ All notifications cancelled');
+      // In a real app, this would cancel scheduled notifications
+      print('🔕 All notifications cancelled');
     } catch (e) {
-      print('❌ Error cancelling all notifications: $e');
+      print('❌ Error cancelling notifications: $e');
     }
   }
 
-  // ============================================================================
-  // UTILITY METHODS
-  // ============================================================================
-
-  static Color? _getNotificationColor(String type) {
-    switch (type) {
-      case 'rental':
-        return const Color(0xFF4CAF50); // Green
-      case 'payment':
-        return const Color(0xFF2196F3); // Blue
-      case 'reminder':
-        return const Color(0xFFFF9800); // Orange
-      case 'promotion':
-        return const Color(0xFF9C27B0); // Purple
-      case 'system':
-        return const Color(0xFF607D8B); // Blue Grey
-      default:
-        return null;
+  /// Get notifications by type
+  static Future<List<app_notification.Notification>> getNotificationsByType(String type) async {
+    try {
+      final notifications = await getAllNotifications();
+      return notifications.where((n) => n.type == type).toList();
+    } catch (e) {
+      print('❌ Error getting notifications by type: $e');
+      return [];
     }
+  }
+
+  /// Private helper methods
+  
+  /// Get all notifications from storage (for all users)
+  /// Get all notifications from storage (for all users)
+  static Future<List<app_notification.Notification>> _getAllNotificationsFromStorage() async {
+    try {
+      final List<dynamic> notificationsData =
+          await HiveService.getSetting<List<dynamic>>(_notificationsBox) ?? [];
+
+      final List<app_notification.Notification> notifications = [];
+      for (var raw in notificationsData) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        notifications.add(app_notification.Notification.fromMap(map));
+      }
+      return notifications;
+    } catch (e) {
+      print('❌ Error getting all notifications from storage: $e');
+      return [];
+    }
+  }
+
+  /// Save notifications to storage
+  static Future<void> _saveNotifications(
+      List<app_notification.Notification> notifications) async {
+    try {
+      final List<Map<String, dynamic>> notificationsData =
+          notifications.map((n) => n.toMap()).toList();
+      await HiveService.saveSetting(_notificationsBox, notificationsData);
+    } catch (e) {
+      print('❌ Error saving notifications: $e');
+    }
+  }
+
+
+  /// Create sample notifications for demonstration
+  static Future<void> _createSampleNotifications() async {
+    try {
+      final userId = UserService.getCurrentUserId();
+      if (userId == null) return;
+      
+      final existingNotifications = await getAllNotifications();
+      if (existingNotifications.isNotEmpty) return; // Don't create if already exists
+      
+      final sampleNotifications = [
+        {
+          'title': 'Selamat Datang di SakuRimba!',
+          'message': 'Terima kasih telah bergabung dengan SakuRimba. Mulai jelajahi peralatan camping terbaik untuk petualangan Anda.',
+          'type': 'system',
+        },
+        {
+          'title': 'Promo Spesial Weekend',
+          'message': 'Dapatkan diskon 20% untuk semua peralatan camping di akhir pekan ini. Gunakan kode: WEEKEND20',
+          'type': 'promotion',
+        },
+        {
+          'title': 'Tips Camping',
+          'message': 'Pastikan untuk selalu membawa perlengkapan P3K dan memeriksa cuaca sebelum berangkat camping.',
+          'type': 'system',
+        },
+      ];
+      
+      for (final notif in sampleNotifications) {
+        await createNotification(
+          userId: userId,
+          title: notif['title']!,
+          message: notif['message']!,
+          type: notif['type']!,
+        );
+      }
+      
+      print('📱 Sample notifications created');
+    } catch (e) {
+      print('❌ Error creating sample notifications: $e');
+    }
+  }
+
+  /// Send rental notification
+  static Future<void> sendRentalNotification({
+    required String userId,
+    required String rentalId,
+    required String peralatanNama,
+    required String type, // created, confirmed, active, completed, cancelled
+  }) async {
+    String title;
+    String message;
+    
+    switch (type) {
+      case 'created':
+        title = 'Sewa Berhasil Dibuat';
+        message = 'Sewa untuk $peralatanNama telah berhasil dibuat. ID: $rentalId';
+        break;
+      case 'confirmed':
+        title = 'Sewa Dikonfirmasi';
+        message = 'Sewa untuk $peralatanNama telah dikonfirmasi dan siap diambil.';
+        break;
+      case 'active':
+        title = 'Sewa Aktif';
+        message = 'Sewa untuk $peralatanNama sedang berjalan. Selamat menikmati petualangan!';
+        break;
+      case 'completed':
+        title = 'Sewa Selesai';
+        message = 'Sewa untuk $peralatanNama telah selesai. Terima kasih telah menggunakan SakuRimba!';
+        break;
+      case 'cancelled':
+        title = 'Sewa Dibatalkan';
+        message = 'Sewa untuk $peralatanNama telah dibatalkan. Refund akan diproses dalam 3-5 hari kerja.';
+        break;
+      default:
+        title = 'Update Sewa';
+        message = 'Status sewa untuk $peralatanNama telah diperbarui.';
+    }
+    
+    await createNotification(
+      userId: userId,
+      title: title,
+      message: message,
+      type: 'rental',
+      data: {
+        'rental_id': rentalId,
+        'peralatan_nama': peralatanNama,
+        'rental_type': type,
+      },
+    );
+  }
+  
+
+  /// Send payment notification
+  static Future<void> sendPaymentNotification({
+    required String userId,
+    required String rentalId,
+    required double amount,
+    required String type, // success, failed, refund
+  }) async {
+    String title;
+    String message;
+    
+    switch (type) {
+      case 'success':
+        title = 'Pembayaran Berhasil';
+        message = 'Pembayaran sebesar Rp ${amount.toStringAsFixed(0)} telah berhasil diproses.';
+        break;
+      case 'failed':
+        title = 'Pembayaran Gagal';
+        message = 'Pembayaran sebesar Rp ${amount.toStringAsFixed(0)} gagal diproses. Silakan coba lagi.';
+        break;
+      case 'refund':
+        title = 'Refund Diproses';
+        message = 'Refund sebesar Rp ${amount.toStringAsFixed(0)} sedang diproses.';
+        break;
+      default:
+        title = 'Update Pembayaran';
+        message = 'Status pembayaran telah diperbarui.';
+    }
+    
+    await createNotification(
+      userId: userId,
+      title: title,
+      message: message,
+      type: 'payment',
+      data: {
+        'rental_id': rentalId,
+        'amount': amount,
+        'payment_type': type,
+      },
+    );
+  }
+
+  /// Send reminder notification
+  static Future<void> sendReminderNotification({
+    required String userId,
+    required String title,
+    required String message,
+    Map<String, dynamic>? data,
+  }) async {
+    await createNotification(
+      userId: userId,
+      title: title,
+      message: message,
+      type: 'reminder',
+      data: data,
+    );
   }
 
   /// Get notification statistics
   static Future<Map<String, dynamic>> getNotificationStats() async {
     try {
-      final notifications = await getUserNotifications();
-      final unreadCount = await getUnreadCount();
+      final notifications = await getAllNotifications();
       
-      // Count by type
-      Map<String, int> typeCount = {};
-      Map<String, int> priorityCount = {};
-      
-      for (var notification in notifications) {
-        typeCount[notification.type] = (typeCount[notification.type] ?? 0) + 1;
-        priorityCount[notification.priority] = (priorityCount[notification.priority] ?? 0) + 1;
+      if (notifications.isEmpty) {
+        return {
+          'total': 0,
+          'unread': 0,
+          'by_type': {},
+          'recent_count': 0,
+        };
       }
       
-      // Recent notifications (last 24 hours)
-      final recentNotifications = notifications.where((notif) => notif.isRecent).length;
+      final unreadCount = notifications.where((n) => !n.isRead).length;
+      final recentCount = notifications.where((n) {
+        final daysDiff = DateTime.now().difference(n.createdAt).inDays;
+        return daysDiff <= 7;
+      }).length;
+      
+      // Count by type
+      final byType = <String, int>{};
+      for (final notification in notifications) {
+        byType[notification.type] = (byType[notification.type] ?? 0) + 1;
+      }
       
       return {
         'total': notifications.length,
         'unread': unreadCount,
-        'read': notifications.length - unreadCount,
-        'recent': recentNotifications,
-        'typeBreakdown': typeCount,
-        'priorityBreakdown': priorityCount,
-        'lastNotification': notifications.isNotEmpty ? notifications.first.createdAt : null,
-        'lastUpdated': DateTime.now().toIso8601String(),
+        'by_type': byType,
+        'recent_count': recentCount,
+        'read_rate': notifications.isNotEmpty 
+            ? ((notifications.length - unreadCount) / notifications.length * 100).round() 
+            : 0,
       };
     } catch (e) {
       print('❌ Error getting notification stats: $e');
@@ -616,76 +455,26 @@ class NotificationService {
     }
   }
 
-  /// Search notifications
-  static Future<List<Notification>> searchNotifications(String query) async {
-    try {
-      final notifications = await getUserNotifications();
-      
-      if (query.isEmpty) return notifications;
-      
-      final searchLower = query.toLowerCase();
-      return notifications.where((notification) {
-        return notification.title.toLowerCase().contains(searchLower) ||
-               notification.message.toLowerCase().contains(searchLower) ||
-               notification.type.toLowerCase().contains(searchLower);
-      }).toList();
-    } catch (e) {
-      print('❌ Error searching notifications: $e');
-      return [];
-    }
-  }
-
-  /// Clean up old notifications (keep only last 500)
-  static Future<void> cleanupOldNotifications() async {
-    try {
-      final notifications = await getUserNotifications();
-      
-      if (notifications.length > 500) {
-        // Sort by creation date, keep only latest 500
-        notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        
-        final box = await HiveService.getNotificationBox();
-        
-        // Delete old ones (beyond 500)
-        for (int i = 500; i < notifications.length; i++) {
-          try {
-            await box.delete(notifications[i].id);
-          } catch (e) {
-            print('⚠️ Could not delete old notification ${notifications[i].id}: $e');
-          }
-        }
-        
-        print('✅ Cleaned up ${notifications.length - 500} old notifications');
-      }
-    } catch (e) {
-      print('❌ Error cleaning up old notifications: $e');
-    }
-  }
-
-  /// Debug print notifications
+  /// Debug method
   static Future<void> printNotificationDebug() async {
     try {
-      final userId = UserService.getCurrentUserId();
-      if (userId == null) {
-        print('🔍 Debug: No user logged in');
-        return;
-      }
-
-      print('🔍 === NOTIFICATION DEBUG for user: $userId ===');
+      print('🔔 === NOTIFICATION SERVICE DEBUG ===');
       
-      final notifications = await getUserNotifications();
-      final unreadCount = await getUnreadCount();
       final stats = await getNotificationStats();
+      print('🔔 Notification Stats: $stats');
       
-      print('🔍 Total notifications: ${notifications.length}');
-      print('🔍 Unread: $unreadCount');
-      print('🔍 Stats: $stats');
+      final notifications = await getAllNotifications();
+      print('🔔 Total Notifications: ${notifications.length}');
       
-      for (var notification in notifications.take(5)) {
-        print('🔍 ${notification.typeIcon} ${notification.title} - ${notification.type} (${notification.isRead ? 'Read' : 'Unread'})');
+      if (notifications.isNotEmpty) {
+        final recent = notifications.first;
+        print('🔔 Recent Notification: ${recent.title} (${recent.type})');
       }
       
-      print('======================================');
+      final unreadCount = await getUnreadCount();
+      print('🔔 Unread Count: $unreadCount');
+      
+      print('==============================');
     } catch (e) {
       print('❌ Error in notification debug: $e');
     }

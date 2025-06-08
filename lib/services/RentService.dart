@@ -21,6 +21,7 @@ class RentService {
   // ============================================================================
 
   /// Create new rental booking
+ /// Buat booking rental baru, simpan ke Hive, lalu kirim notifikasi “created”
   static Future<String?> createRental({
     required String peralatanId,
     required String peralatanNama,
@@ -32,7 +33,8 @@ class RentService {
     String? userPhone,
   }) async {
     try {
-      final userId = getCurrentUserId();
+      // Pastikan user sudah login
+      final userId = UserService.getCurrentUserId();
       if (userId == null) {
         throw Exception('User tidak login. Silakan login terlebih dahulu.');
       }
@@ -42,21 +44,20 @@ class RentService {
         throw Exception('Data user tidak ditemukan.');
       }
 
-      // Validate dates
+      // Validasi tanggal
       if (startDate.isAfter(endDate)) {
         throw Exception('Tanggal mulai tidak boleh setelah tanggal selesai.');
       }
-
-      if (startDate.isBefore(DateTime.now().subtract(Duration(hours: 1)))) {
+      if (startDate.isBefore(DateTime.now().subtract(const Duration(hours: 1)))) {
         throw Exception('Tanggal mulai tidak boleh di masa lalu.');
       }
 
-      // Calculate total price
+      // Hitung total harga
       final totalPrice = quantity * rentalDays * pricePerDay;
 
-      // Create rental object
+      // Buat objek Rent
       final rental = Rent(
-        id: generateRentalId(),
+        id: HiveService.generateRentalId(),
         peralatanId: peralatanId,
         peralatanNama: peralatanNama,
         userId: userId,
@@ -72,15 +73,15 @@ class RentService {
         createdAt: DateTime.now(),
       );
 
-      // Save rental
+      // Simpan rental ke Hive
       final rentalId = await HiveService.saveRental(rental);
 
-      // Create notification
-      await NotificationService.createRentalNotification(
+      // Kirim notifikasi “created”
+      await NotificationService.sendRentalNotification(
         userId: userId,
-        title: 'Booking Berhasil',
-        message: 'Booking untuk $peralatanNama telah berhasil dibuat. ID: $rentalId',
         rentalId: rentalId,
+        peralatanNama: peralatanNama,
+        type: 'created',
       );
 
       print('✅ Rental created successfully: $rentalId');
@@ -91,10 +92,13 @@ class RentService {
     }
   }
 
-  /// Update rental status
-  static Future<Rent?> updateRentalStatus(String rentalId, String newStatus) async {
+  /// Update status rental dan kirim notifikasi sesuai status baru
+  static Future<Rent?> updateRentalStatus(
+      String rentalId,
+      String newStatus,
+  ) async {
     try {
-      final userId = getCurrentUserId();
+      final userId = UserService.getCurrentUserId();
       if (userId == null) {
         throw Exception('User tidak login.');
       }
@@ -104,45 +108,21 @@ class RentService {
         throw Exception('Rental tidak ditemukan.');
       }
 
-      // Check if user can access this rental
+      // Pastikan user punya akses
       if (!UserService.canAccessRental(rental.userId)) {
         throw Exception('Anda tidak memiliki akses untuk rental ini.');
       }
 
-      // Update status
+      // Update status di Hive
       final updatedRental = await HiveService.updateRentalStatus(rentalId, newStatus);
 
-      // Create notification based on status change
-      String notificationTitle = '';
-      String notificationMessage = '';
-      
-      switch (newStatus) {
-        case 'confirmed':
-          notificationTitle = 'Rental Dikonfirmasi';
-          notificationMessage = 'Rental ${rental.peralatanNama} telah dikonfirmasi.';
-          break;
-        case 'active':
-          notificationTitle = 'Rental Dimulai';
-          notificationMessage = 'Rental ${rental.peralatanNama} telah dimulai. Selamat berkemah!';
-          break;
-        case 'completed':
-          notificationTitle = 'Rental Selesai';
-          notificationMessage = 'Rental ${rental.peralatanNama} telah selesai. Terima kasih telah menggunakan layanan kami.';
-          break;
-        case 'cancelled':
-          notificationTitle = 'Rental Dibatalkan';
-          notificationMessage = 'Rental ${rental.peralatanNama} telah dibatalkan.';
-          break;
-      }
-
-      if (notificationTitle.isNotEmpty) {
-        await NotificationService.createRentalNotification(
-          userId: userId,
-          title: notificationTitle,
-          message: notificationMessage,
-          rentalId: rentalId,
-        );
-      }
+      // Kirim notifikasi berdasarkan status
+      await NotificationService.sendRentalNotification(
+        userId: userId,
+        rentalId: rentalId,
+        peralatanNama: rental.peralatanNama,
+        type: newStatus,  // e.g. 'confirmed','active','completed','cancelled'
+      );
 
       print('✅ Rental status updated: $rentalId -> $newStatus');
       return updatedRental;
@@ -152,10 +132,14 @@ class RentService {
     }
   }
 
-  /// Process payment for rental
-  static Future<Rent?> processPayment(String rentalId, String paymentStatus, double amount) async {
+  /// Proses pembayaran dan kirim notifikasi sesuai jenis pembayaran
+  static Future<Rent?> processPayment(
+    String rentalId,
+    String paymentStatus,
+    double amount,
+  ) async {
     try {
-      final userId = getCurrentUserId();
+      final userId = UserService.getCurrentUserId();
       if (userId == null) {
         throw Exception('User tidak login.');
       }
@@ -169,40 +153,28 @@ class RentService {
         throw Exception('Anda tidak memiliki akses untuk rental ini.');
       }
 
-      // Process payment
-      final updatedRental = await HiveService.updateRentalPayment(rentalId, paymentStatus, amount);
-
-      // Create payment notification
-      String notificationTitle = '';
-      String notificationMessage = '';
-      
-      switch (paymentStatus) {
-        case 'dp':
-          notificationTitle = 'Pembayaran DP Berhasil';
-          notificationMessage = 'Pembayaran DP sebesar Rp ${amount.toStringAsFixed(0)} untuk ${rental.peralatanNama} berhasil.';
-          break;
-        case 'paid':
-          notificationTitle = 'Pembayaran Lunas';
-          notificationMessage = 'Pembayaran untuk ${rental.peralatanNama} telah lunas. Total: Rp ${rental.totalPrice.toStringAsFixed(0)}';
-          break;
-      }
-
-      await NotificationService.createPaymentNotification(
-        userId: userId,
-        title: notificationTitle,
-        message: notificationMessage,
-        rentalId: rentalId,
-        amount: amount,
+      // Update status pembayaran di Hive
+      final updatedRental = await HiveService.updateRentalPayment(
+        rentalId,
+        paymentStatus,
+        amount,
       );
 
-      print('✅ Payment processed: $rentalId -> $paymentStatus (${amount})');
+      // Kirim notifikasi pembayaran
+      await NotificationService.sendPaymentNotification(
+        userId: userId,
+        rentalId: rentalId,
+        amount: amount,
+        type: paymentStatus,  // 'dp','paid','refund'
+      );
+
+      print('✅ Payment processed: $rentalId -> $paymentStatus (Rp $amount)');
       return updatedRental;
     } catch (e) {
       print('❌ Error processing payment: $e');
       return null;
     }
   }
-
   /// Pay remaining amount for rental
   static Future<Rent?> payRemainingAmount(String rentalId) async {
     try {
@@ -246,12 +218,15 @@ class RentService {
       await HiveService.updateRentalStatus(rentalId, 'cancelled');
 
       // Create cancellation notification
-      await NotificationService.createRentalNotification(
+      await NotificationService.sendReminderNotification(
         userId: userId,
         title: 'Rental Dibatalkan',
-        message: 'Rental ${rental.peralatanNama} telah dibatalkan.' + 
-                 (reason != null ? ' Alasan: $reason' : ''),
-        rentalId: rentalId,
+        message: 'Rental ${rental.peralatanNama} telah dibatalkan.'
+                + (reason != null ? ' Alasan: $reason' : ''),
+        data: {
+          'rental_id': rentalId,
+          if (reason != null) 'reason': reason,
+        },
       );
 
       print('✅ Rental cancelled: $rentalId');
@@ -448,35 +423,36 @@ class RentService {
   // ============================================================================
 
   /// Check and send reminders for upcoming rentals
-  static Future<void> checkAndSendReminders() async {
-    try {
-      final upcomingRentals = await getUpcomingRentals();
+static Future<void> checkAndSendReminders() async {
+  try {
+    final upcomingRentals = await getUpcomingRentals();
+    for (var rental in upcomingRentals) {
+      final daysUntilStart = rental.startDate
+          .difference(DateTime.now())
+          .inDays;
       
-      for (var rental in upcomingRentals) {
-        final daysUntilStart = rental.startDate.difference(DateTime.now()).inDays;
-        
-        if (daysUntilStart == 1) {
-          // Send reminder 1 day before
-          await NotificationService.createReminderNotification(
-            userId: rental.userId,
-            title: 'Reminder: Rental Besok',
-            message: 'Rental ${rental.peralatanNama} dimulai besok (${_formatDate(rental.startDate)})',
-            rentalId: rental.id,
-          );
-        } else if (daysUntilStart == 0) {
-          // Send reminder on the day
-          await NotificationService.createReminderNotification(
-            userId: rental.userId,
-            title: 'Reminder: Rental Hari Ini',
-            message: 'Rental ${rental.peralatanNama} dimulai hari ini. Jangan lupa ambil peralatan Anda!',
-            rentalId: rental.id,
-          );
-        }
+      if (daysUntilStart == 1) {
+        await NotificationService.sendReminderNotification(
+          userId: rental.userId,
+          title: 'Reminder: Rental Besok',
+          message: 'Rental ${rental.peralatanNama} dimulai besok '
+                   '(${_formatDate(rental.startDate)})',
+          data: {'rental_id': rental.id},
+        );
+      } else if (daysUntilStart == 0) {
+        await NotificationService.sendReminderNotification(
+          userId: rental.userId,
+          title: 'Reminder: Rental Hari Ini',
+          message: 'Rental ${rental.peralatanNama} dimulai hari ini. '
+                   'Jangan lupa ambil peralatan Anda!',
+          data: {'rental_id': rental.id},
+        );
       }
-    } catch (e) {
-      print('❌ Error checking and sending reminders: $e');
     }
+  } catch (e) {
+    print('❌ Error checking and sending reminders: $e');
   }
+}
 
   /// Check and update expired rentals
   static Future<int> updateExpiredRentals() async {

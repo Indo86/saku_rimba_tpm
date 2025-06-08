@@ -1,544 +1,371 @@
-// services/AppInitService.dart (SakuRimba)
-import 'dart:async';
+// services/AppInitService.dart (SakuRimba) - FIXED
 import '../services/HiveService.dart';
 import '../services/UserService.dart';
+import '../services/SettingsService.dart';
 import '../services/NotificationService.dart';
-import '../services/FavoriteService.dart';
-import '../services/RentService.dart';
+import '../services/SensorService.dart';
 import '../services/CurrencyService.dart';
 import '../services/TimeZoneService.dart';
-import '../services/SensorService.dart';
-import '../services/LocationService.dart';
-import '../services/ApiService.dart';
-import '../services/SearchService.dart';
-import '../services/SettingsService.dart';
 
-/// Service untuk menginisialisasi semua service dalam aplikasi SakuRimba
-/// dengan urutan yang benar dan error handling yang tepat
 class AppInitService {
-  static bool _isInitialized = false;
-  static bool _isInitializing = false;
-  static final List<String> _initializationLog = [];
-  static final List<String> _failedServices = [];
-  
-  // Service initialization order (critical services first)
-  static const List<Map<String, dynamic>> _serviceInitOrder = [
-    {
-      'name': 'HiveService',
-      'critical': true,
-      'description': 'Database dan storage lokal',
-    },
-    {
-      'name': 'SettingsService',
-      'critical': true,
-      'description': 'Pengaturan aplikasi',
-    },
-    {
-      'name': 'UserService',
-      'critical': true,
-      'description': 'Manajemen user dan autentikasi',
-    },
-    {
-      'name': 'NotificationService',
-      'critical': false,
-      'description': 'Notifikasi lokal dan push',
-    },
-    {
-      'name': 'CurrencyService',
-      'critical': false,
-      'description': 'Konversi mata uang',
-    },
-    {
-      'name': 'TimeZoneService',
-      'critical': false,
-      'description': 'Konversi zona waktu',
-    },
-    {
-      'name': 'ApiService',
-      'critical': false,
-      'description': 'Koneksi ke API backend',
-    },
-    {
-      'name': 'SearchService',
-      'critical': false,
-      'description': 'Pencarian dan filter',
-    },
-    {
-      'name': 'SensorService',
-      'critical': false,
-      'description': 'Sensor perangkat',
-    },
-    {
-      'name': 'LocationService',
-      'critical': false,
-      'description': 'Layanan lokasi dan GPS',
-    },
-  ];
-
-  // ============================================================================
-  // MAIN INITIALIZATION
-  // ============================================================================
-
-  /// Initialize all services
+  /// Initialize the entire application
   static Future<bool> initializeApp() async {
-    if (_isInitialized) {
-      print('✅ App already initialized');
-      return true;
-    }
-
-    if (_isInitializing) {
-      print('⏳ App initialization already in progress');
-      return false;
-    }
-
-    _isInitializing = true;
-    _initializationLog.clear();
-    _failedServices.clear();
-
     try {
       print('🚀 Starting SakuRimba app initialization...');
-      _log('Starting app initialization');
-
-      final stopwatch = Stopwatch()..start();
-
-      // Initialize services in order
-      for (var serviceConfig in _serviceInitOrder) {
-        final serviceName = serviceConfig['name'] as String;
-        final isCritical = serviceConfig['critical'] as bool;
-        final description = serviceConfig['description'] as String;
-
-        try {
-          print('📦 Initializing $serviceName ($description)...');
-          _log('Starting $serviceName initialization');
-
-          final serviceStopwatch = Stopwatch()..start();
-          await _initializeService(serviceName);
-          serviceStopwatch.stop();
-
-          final duration = serviceStopwatch.elapsedMilliseconds;
-          print('✅ $serviceName initialized in ${duration}ms');
-          _log('$serviceName initialized successfully in ${duration}ms');
-
-        } catch (e) {
-          print('❌ Failed to initialize $serviceName: $e');
-          _log('$serviceName initialization failed: $e');
-          _failedServices.add(serviceName);
-
-          if (isCritical) {
-            print('💥 Critical service $serviceName failed, aborting initialization');
-            _log('Critical service failure, aborting initialization');
-            _isInitializing = false;
-            return false;
-          } else {
-            print('⚠️ Non-critical service $serviceName failed, continuing...');
-            _log('Non-critical service failure, continuing initialization');
-          }
+      
+      // Step 1: Initialize Hive (database)
+      print('📦 Initializing Hive database...');
+      await HiveService.init();
+      
+      // Step 2: Initialize User Service
+      print('👤 Initializing User Service...');
+      await UserService.initCurrentUser();
+      
+      // Step 3: Initialize Settings Service
+      print('⚙️ Initializing Settings Service...');
+      await SettingsService.init();
+      
+      // Step 4: Initialize Notification Service
+      print('🔔 Initializing Notification Service...');
+      await NotificationService.init();
+      
+      // Step 5: Initialize Sensor Service (optional, can fail)
+      print('📱 Initializing Sensor Service...');
+      try {
+        await SensorService.init();
+      } catch (e) {
+        print('⚠️ Sensor Service initialization failed (non-critical): $e');
+      }
+      
+      // Step 6: Update expired rentals
+      print('🔄 Checking for expired rentals...');
+      try {
+        final updatedCount = await HiveService.updateExpiredRentals();
+        if (updatedCount > 0) {
+          print('✅ Updated $updatedCount expired rentals');
         }
+      } catch (e) {
+        print('⚠️ Error updating expired rentals: $e');
       }
-
-      stopwatch.stop();
-      final totalDuration = stopwatch.elapsedMilliseconds;
-
-      // Post-initialization tasks
-      await _performPostInitTasks();
-
-      _isInitialized = true;
-      _isInitializing = false;
-
-      final successCount = _serviceInitOrder.length - _failedServices.length;
-      print('🎉 SakuRimba app initialization completed!');
-      print('✅ $successCount/${_serviceInitOrder.length} services initialized');
-      print('⏱️ Total initialization time: ${totalDuration}ms');
-
-      if (_failedServices.isNotEmpty) {
-        print('⚠️ Failed services: ${_failedServices.join(', ')}');
+      
+      // Step 7: Cleanup old data
+      print('🧹 Performing maintenance tasks...');
+      try {
+        await _performMaintenanceTasks();
+      } catch (e) {
+        print('⚠️ Maintenance tasks failed (non-critical): $e');
       }
-
-      _log('App initialization completed successfully in ${totalDuration}ms');
+      
+      // Step 8: Print initialization summary
+      await _printInitializationSummary();
+      
+      print('✅ SakuRimba app initialization completed successfully!');
       return true;
-
+      
     } catch (e) {
-      print('💥 App initialization failed: $e');
-      _log('App initialization failed: $e');
-      _isInitializing = false;
+      print('❌ Critical error during app initialization: $e');
       return false;
     }
   }
 
-  /// Initialize individual service
-  static Future<void> _initializeService(String serviceName) async {
-    switch (serviceName) {
-      case 'HiveService':
-        await HiveService.init();
-        break;
-      case 'SettingsService':
-        await SettingsService.init();
-        break;
-      case 'UserService':
-        await UserService.initCurrentUser();
-        break;
-      case 'NotificationService':
-        await NotificationService.init();
-        break;
-      case 'CurrencyService':
-        await CurrencyService.init();
-        break;
-      case 'TimeZoneService':
-        await TimeZoneService.init();
-        break;
-      case 'ApiService':
-        await ApiService.init();
-        break;
-      case 'SearchService':
-        await SearchService.init();
-        break;
-      case 'SensorService':
-        await SensorService.init();
-        break;
-      case 'LocationService':
-        await LocationService.init();
-        break;
-      default:
-        throw Exception('Unknown service: $serviceName');
+  /// Perform maintenance tasks
+  static Future<void> _performMaintenanceTasks() async {
+    try {
+      // Clean up old notifications (keep only last 500)
+      await NotificationService.cleanupOldNotifications();
+      
+      // Clean up old rentals (keep only last 100 completed)
+      // This is commented out as it's implemented in RentService
+      // await RentService.cleanupOldRentals();
+      
+      // Clean up invalid favorites
+      // This is commented out as it requires user login check
+      // await FavoriteService.cleanupInvalidFavorites();
+      
+      print('✅ Maintenance tasks completed');
+    } catch (e) {
+      print('❌ Error in maintenance tasks: $e');
     }
   }
 
-  /// Perform post-initialization tasks
-  static Future<void> _performPostInitTasks() async {
+  /// Print initialization summary
+  static Future<void> _printInitializationSummary() async {
     try {
-      _log('Starting post-initialization tasks');
+      print('\n🔍 === SAKURIMBA INITIALIZATION SUMMARY ===');
 
-      // Update expired rentals
+      // User info
+      if (UserService.isUserLoggedIn()) {
+        final user = UserService.getCurrentUser();
+        print(
+          '👤 Logged in user: '
+          '${user?.displayName ?? user?.username ?? 'Unknown'}'
+        );
+        print(
+          '📊 Profile completion: '
+          '${UserService.getUserProfileCompletion().toInt()}%'
+        );
+      } else {
+        print('👤 No user logged in (guest mode)');
+      }
+
+      // Database stats
+      final allUsers = await UserService.getAllUsers();
+      print('👥 Total registered users: ${allUsers.length}');
+
+      // Settings info - FIXED: Added proper null checking
+      final settingsStatus = SettingsService.getServiceStatus();
+      if (settingsStatus is Map<String, dynamic>) {
+        final totalSettings = settingsStatus['totalSettings'] as int? ?? 0;
+        print('⚙️ Settings: $totalSettings configured');
+      } else {
+        print('⚙️ Settings: Unable to retrieve settings count');
+      }
+
+      // Theme & Language
+      print('🎨 Theme: ${SettingsService.getTheme()}');
+      print('🌐 Language: ${SettingsService.getLanguage()}');
+
+      // Notifications
+      if (UserService.isUserLoggedIn()) {
+        final unreadCount = await NotificationService.getUnreadCount();
+        print('🔔 Unread notifications: $unreadCount');
+      }
+
+      // Sensors - FIXED: Added proper null checking
+      final sensorStatus = SensorService.getSensorStatus();
+      if (sensorStatus is Map<String, dynamic>) {
+        final sensorsInited = sensorStatus['initialized'] as bool? ?? false;
+        print('📱 Sensors initialized: $sensorsInited');
+      } else {
+        print('📱 Sensors initialized: false');
+      }
+
+      // App info
+      print('📅 Initialization time: ${DateTime.now()}');
+      print('🏷️ App version: 1.0.0');
+
+      print('==========================================\n');
+    } catch (e) {
+      print('❌ Error printing initialization summary: $e');
+    }
+  }
+
+  /// Check app health after initialization
+  static Future<Map<String, dynamic>> checkAppHealth() async {
+    try {
+      // FIXED: Create properly typed nested maps
+      final services = <String, dynamic>{};
+      final database = <String, dynamic>{};
+      final user = <String, dynamic>{};
+      
+      final health = {
+        'overall_status': 'healthy',
+        'timestamp': DateTime.now().toIso8601String(),
+        'services': services,
+        'database': database,
+        'user': user,
+      };
+      
+      // Check Hive service
       try {
-        final expiredCount = await HiveService.updateExpiredRentals();
-        if (expiredCount > 0) {
-          _log('Updated $expiredCount expired rentals');
+        final allUsers = await UserService.getAllUsers();
+        services['hive'] = 'healthy';
+        database['total_users'] = allUsers.length;
+      } catch (e) {
+        services['hive'] = 'error: $e';
+        health['overall_status'] = 'degraded';
+      }
+      
+      // Check User service
+      try {
+        final isLoggedIn = UserService.isUserLoggedIn();
+        services['user'] = 'healthy';
+        user['logged_in'] = isLoggedIn;
+        
+        if (isLoggedIn) {
+          final currentUser = UserService.getCurrentUser();
+          user['username'] = currentUser?.username;
+          user['profile_completion'] = UserService.getUserProfileCompletion();
         }
       } catch (e) {
-        _log('Failed to update expired rentals: $e');
+        services['user'] = 'error: $e';
+        health['overall_status'] = 'degraded';
       }
-
-      // Clean up old notifications
-      try {
-        await NotificationService.cleanupOldNotifications();
-        _log('Cleaned up old notifications');
-      } catch (e) {
-        _log('Failed to cleanup notifications: $e');
-      }
-
-      // Check for app updates or important announcements
-      try {
-        await _checkForUpdates();
-      } catch (e) {
-        _log('Failed to check for updates: $e');
-      }
-
-      _log('Post-initialization tasks completed');
-    } catch (e) {
-      _log('Post-initialization tasks failed: $e');
-    }
-  }
-
-  /// Check for app updates
-  static Future<void> _checkForUpdates() async {
-    try {
-      final autoUpdate = SettingsService.getSetting<bool>('app_auto_update', defaultValue: true);
       
-      if (autoUpdate == true) {
-        // In a real app, this would check app store or server for updates
-        _log('Checked for app updates');
+      // Check Settings service
+      try {
+        final settingsStatus = SettingsService.getServiceStatus();
+        services['settings'] = 'healthy';
+        health['settings'] = settingsStatus;
+      } catch (e) {
+        services['settings'] = 'error: $e';
+        health['overall_status'] = 'degraded';
       }
+      
+      // Check Notification service
+      try {
+        if (UserService.isUserLoggedIn()) {
+          final unreadCount = await NotificationService.getUnreadCount();
+          services['notifications'] = 'healthy';
+          health['notifications'] = {'unread_count': unreadCount};
+        } else {
+          services['notifications'] = 'not_applicable_guest_mode';
+        }
+      } catch (e) {
+        services['notifications'] = 'error: $e';
+        health['overall_status'] = 'degraded';
+      }
+      
+      // Check Sensor service - FIXED: Added proper null checking
+      try {
+        final sensorStatus = SensorService.getSensorStatus();
+        if (sensorStatus is Map<String, dynamic>) {
+          final initialized = sensorStatus['initialized'] as bool? ?? false;
+          services['sensors'] = initialized ? 'healthy' : 'disabled';
+          health['sensors'] = sensorStatus;
+        } else {
+          services['sensors'] = 'disabled';
+          health['sensors'] = {'initialized': false};
+        }
+      } catch (e) {
+        services['sensors'] = 'error: $e';
+        // Sensors are optional, don't degrade overall status
+      }
+      
+      return health;
     } catch (e) {
-      _log('Update check failed: $e');
+      return {
+        'overall_status': 'error',
+        'error': e.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+      };
     }
   }
 
-  // ============================================================================
-  // REINITIALIZATION AND RECOVERY
-  // ============================================================================
+  /// Restart app services (for recovery)
+  static Future<bool> restartServices() async {
+    try {
+      print('🔄 Restarting SakuRimba services...');
+      
+      // Stop and restart critical services
+      await NotificationService.cancelAllNotifications();
+      await SensorService.dispose();
+      
+      // Reinitialize
+      await NotificationService.init();
+      await SensorService.init();
+      
+      print('✅ Services restarted successfully');
+      return true;
+    } catch (e) {
+      print('❌ Error restarting services: $e');
+      return false;
+    }
+  }
 
-  /// Reinitialize failed services
-  static Future<bool> reinitializeFailedServices() async {
-    if (_failedServices.isEmpty) {
-      print('✅ No failed services to reinitialize');
+  /// Emergency shutdown
+  static Future<void> emergencyShutdown() async {
+    try {
+      print('🚨 Emergency shutdown initiated...');
+      
+      // Cancel all notifications
+      await NotificationService.cancelAllNotifications();
+      
+      // Dispose sensors
+      await SensorService.dispose();
+      
+      // Close all Hive boxes
+      await HiveService.closeAllBoxes();
+      
+      print('✅ Emergency shutdown completed');
+    } catch (e) {
+      print('❌ Error during emergency shutdown: $e');
+    }
+  }
+
+  /// Get initialization report
+  static Future<Map<String, dynamic>> getInitializationReport() async {
+    try {
+      // Pastikan tipe report adalah Map<String, dynamic>
+      final Map<String, dynamic> report = {
+        'app_name': 'SakuRimba',
+        'version': '1.0.0',
+        'initialization_time': DateTime.now().toIso8601String(),
+        'status': 'initialized',
+      };
+      
+      // Add health check (Map<String, dynamic>)
+      final Map<String, dynamic> health = await checkAppHealth();
+      report['health'] = health;
+      
+      // Add user stats (bisa Map atau primitive)
+      if (UserService.isUserLoggedIn()) {
+        final dynamic userStats = await UserService.getUserStats();
+        report['user_stats'] = userStats;
+      }
+      
+      return report;
+    } catch (e) {
+      // Juga kembalikan Map<String, dynamic>
+      return <String, dynamic>{
+        'app_name': 'SakuRimba',
+        'status': 'error',
+        'error': e.toString(),
+        'initialization_time': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
+
+  /// Check if app needs reinitialization
+  static Future<bool> needsReinitialization() async {
+    try {
+      // Check if critical services are working
+      final health = await checkAppHealth();
+      return health['overall_status'] == 'error';
+    } catch (e) {
       return true;
     }
-
-    print('🔄 Reinitializing ${_failedServices.length} failed services...');
-    _log('Starting reinitialization of failed services');
-
-    final failedServicesCopy = List<String>.from(_failedServices);
-    _failedServices.clear();
-
-    bool allSucceeded = true;
-
-    for (var serviceName in failedServicesCopy) {
-      try {
-        print('🔄 Reinitializing $serviceName...');
-        await _initializeService(serviceName);
-        print('✅ $serviceName reinitialized successfully');
-        _log('$serviceName reinitialized successfully');
-      } catch (e) {
-        print('❌ Failed to reinitialize $serviceName: $e');
-        _log('$serviceName reinitialization failed: $e');
-        _failedServices.add(serviceName);
-        allSucceeded = false;
-      }
-    }
-
-    if (allSucceeded) {
-      print('🎉 All failed services reinitialized successfully');
-    } else {
-      print('⚠️ Some services still failed: ${_failedServices.join(', ')}');
-    }
-
-    return allSucceeded;
   }
 
-  /// Restart app initialization
-  static Future<bool> restartInitialization() async {
-    print('🔄 Restarting app initialization...');
-    _log('Restarting app initialization');
-
-    _isInitialized = false;
-    _isInitializing = false;
-    _failedServices.clear();
-
-    return await initializeApp();
-  }
-
-  // ============================================================================
-  // SERVICE HEALTH CHECK
-  // ============================================================================
-
-  /// Check health of all services
-  static Future<Map<String, dynamic>> performHealthCheck() async {
-    final healthResults = <String, Map<String, dynamic>>{};
-    
-    print('🏥 Performing service health check...');
-
-    for (var serviceConfig in _serviceInitOrder) {
-      final serviceName = serviceConfig['name'] as String;
-      
-      try {
-        final health = await _checkServiceHealth(serviceName);
-        healthResults[serviceName] = health;
-      } catch (e) {
-        healthResults[serviceName] = {
-          'status': 'error',
-          'message': e.toString(),
-          'timestamp': DateTime.now().toIso8601String(),
-        };
-      }
-    }
-
-    final healthyCount = healthResults.values
-        .where((health) => health['status'] == 'healthy')
-        .length;
-
-    final overallHealth = {
-      'overall': healthyCount == healthResults.length ? 'healthy' : 'degraded',
-      'healthyServices': healthyCount,
-      'totalServices': healthResults.length,
-      'services': healthResults,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-
-    print('🏥 Health check completed: $healthyCount/${healthResults.length} services healthy');
-    return overallHealth;
-  }
-
-  /// Check individual service health
-  static Future<Map<String, dynamic>> _checkServiceHealth(String serviceName) async {
-    switch (serviceName) {
-      case 'HiveService':
-        return {
-          'status': 'healthy',
-          'details': 'Database accessible',
-        };
-      case 'UserService':
-        return {
-          'status': UserService.isUserLoggedIn() ? 'healthy' : 'info',
-          'details': UserService.isUserLoggedIn() ? 'User logged in' : 'No user logged in',
-        };
-      case 'ApiService':
-        final apiStatus = await ApiService.getServiceStatus();
-        return {
-          'status': apiStatus['apiReachable'] ? 'healthy' : 'warning',
-          'details': apiStatus,
-        };
-      case 'LocationService':
-        return {
-          'status': LocationService.isLocationEnabled ? 'healthy' : 'warning',
-          'details': 'Location ${LocationService.isLocationEnabled ? 'enabled' : 'disabled'}',
-        };
-      default:
-        return {
-          'status': _failedServices.contains(serviceName) ? 'error' : 'healthy',
-          'details': 'Service status unknown',
-        };
-    }
-  }
-
-  // ============================================================================
-  // APP LIFECYCLE
-  // ============================================================================
-
-  /// Handle app pause/background
-  static Future<void> onAppPaused() async {
+  /// Perform app update migration (for future use)
+  static Future<void> performMigration(String fromVersion, String toVersion) async {
     try {
-      print('⏸️ App paused, saving state...');
-      _log('App paused');
-
-      // Stop location tracking to save battery
-      if (LocationService.isTrackingEnabled) {
-        await LocationService.stopLocationTracking();
-      }
-
-      // Stop sensor monitoring
-      await SensorService.stopAllSensors();
-
-      _log('App state saved for background');
+      print('🔄 Performing migration from $fromVersion to $toVersion...');
+      
+      // Migration logic would go here
+      // For example:
+      // - Database schema updates
+      // - Settings migration
+      // - Data format changes
+      
+      print('✅ Migration completed successfully');
     } catch (e) {
-      _log('Error handling app pause: $e');
+      print('❌ Migration failed: $e');
+      rethrow;
     }
   }
 
-  /// Handle app resume/foreground
-  static Future<void> onAppResumed() async {
+  /// Debug method to print all service statuses
+  static Future<void> printDebugInfo() async {
     try {
-      print('▶️ App resumed, restoring state...');
-      _log('App resumed');
-
-      // Restart location tracking if it was enabled
-      if (LocationService.isLocationEnabled && 
-          SettingsService.getSetting<bool>('location_tracking', defaultValue: false) == true) {
-        await LocationService.startLocationTracking();
-      }
-
-      // Restart sensors
-      await SensorService.startAccelerometer();
-      await SensorService.startMagnetometer();
-
-      // Check for updates
-      await RentService.updateExpiredRentals();
-
-      _log('App state restored from background');
+      print('\n🔍 === SAKURIMBA DEBUG INFO ===');
+      
+      // Print each service debug info
+      await UserService.printUserDebug();
+      await SettingsService.printSettingsDebug();
+      await NotificationService.printNotificationDebug();
+      SensorService.printSensorDebug();
+      CurrencyService.printCurrencyDebug();
+      TimeZoneService.printTimeZoneDebug();
+      
+      // Print health check
+      final health = await checkAppHealth();
+      print('🏥 App Health: ${health['overall_status']}');
+      
+      print('==============================\n');
     } catch (e) {
-      _log('Error handling app resume: $e');
+      print('❌ Error printing debug info: $e');
     }
-  }
-
-  /// Handle app termination
-  static Future<void> onAppTerminated() async {
-    try {
-      print('🛑 App terminating, cleaning up...');
-      _log('App terminating');
-
-      // Stop all services
-      await LocationService.dispose();
-      await SensorService.dispose();
-      await HiveService.closeAllBoxes();
-
-      _log('App cleanup completed');
-    } catch (e) {
-      _log('Error during app termination: $e');
-    }
-  }
-
-  // ============================================================================
-  // UTILITY METHODS
-  // ============================================================================
-
-  /// Log initialization events
-  static void _log(String message) {
-    final timestamp = DateTime.now().toIso8601String();
-    final logEntry = '[$timestamp] $message';
-    _initializationLog.add(logEntry);
-    
-    // Keep only last 100 log entries
-    if (_initializationLog.length > 100) {
-      _initializationLog.removeAt(0);
-    }
-  }
-
-  /// Get initialization status
-  static Map<String, dynamic> getInitializationStatus() {
-    return {
-      'isInitialized': _isInitialized,
-      'isInitializing': _isInitializing,
-      'totalServices': _serviceInitOrder.length,
-      'successfulServices': _serviceInitOrder.length - _failedServices.length,
-      'failedServices': List.from(_failedServices),
-      'initializationLog': List.from(_initializationLog),
-    };
-  }
-
-  /// Get service list
-  static List<Map<String, dynamic>> getServiceList() {
-    return _serviceInitOrder.map((service) => {
-      ...service,
-      'status': _failedServices.contains(service['name']) ? 'failed' : 'initialized',
-    }).toList();
-  }
-
-  /// Check if app is ready
-  static bool get isAppReady => _isInitialized && !_isInitializing;
-
-  /// Check if critical services are working
-  static bool get areCriticalServicesReady {
-    final criticalServices = _serviceInitOrder
-        .where((service) => service['critical'] == true)
-        .map((service) => service['name'] as String);
-    
-    return !criticalServices.any((service) => _failedServices.contains(service));
-  }
-
-  // ============================================================================
-  // DEBUG METHODS
-  // ============================================================================
-
-  /// Print initialization debug info
-  static Future<void> printInitializationDebug() async {
-    try {
-      print('🔍 === APP INITIALIZATION DEBUG ===');
-      
-      final status = getInitializationStatus();
-      print('🔍 Status: $status');
-      
-      print('🔍 Service status:');
-      for (var service in getServiceList()) {
-        final name = service['name'];
-        final status = service['status'];
-        final critical = service['critical'] ? '[CRITICAL]' : '[OPTIONAL]';
-        print('  $name $critical: $status');
-      }
-      
-      if (_initializationLog.isNotEmpty) {
-        print('🔍 Recent log entries:');
-        for (var entry in _initializationLog.take(10)) {
-          print('  $entry');
-        }
-      }
-      
-      // Perform health check
-      final health = await performHealthCheck();
-      print('🔍 Health check: ${health['overall']} (${health['healthyServices']}/${health['totalServices']})');
-      
-      print('==============================');
-    } catch (e) {
-      print('❌ Error in initialization debug: $e');
-    }
-  }
-
-  /// Export initialization logs
-  static Map<String, dynamic> exportInitializationLogs() {
-    return {
-      'status': getInitializationStatus(),
-      'services': getServiceList(),
-      'logs': _initializationLog,
-      'exportDate': DateTime.now().toIso8601String(),
-      'appVersion': '1.0.0', // Would come from package info in real app
-    };
   }
 }

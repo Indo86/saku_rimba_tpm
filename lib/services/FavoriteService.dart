@@ -2,236 +2,216 @@
 import '../services/HiveService.dart';
 import '../services/UserService.dart';
 import '../models/Peralatan.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class FavoriteService {
-  // API endpoint untuk data peralatan
-  static const String _apiEndpoint = 'https://your-api-endpoint.com/api/peralatan';
-
-  // Get current user ID dari UserService
-  static String? getCurrentUserId() {
-    return UserService.getCurrentUsername();
-  }
-
-  // Get favorite peralatan IDs for current user dari Hive
-  static Future<Set<String>> getFavoriteIds() async {
+  /// Add peralatan to favorites
+  static Future<void> addToFavorites(Peralatan peralatan) async {
     try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
         throw Exception('User tidak login. Silakan login terlebih dahulu.');
       }
 
-      final favoritesBox = await HiveService.getFavoritesBox(userId);
-      final favoriteIds = favoritesBox.keys.cast<String>().toSet();
-      print('📱 Loaded ${favoriteIds.length} favorite IDs for user: $userId');
-      return favoriteIds;
-    } catch (e) {
-      print('❌ Error getting favorite IDs: $e');
-      return <String>{};
-    }
-  }
-
-  // Get favorite peralatan details by fetching from API
-  static Future<List<Peralatan>> getFavoritePeralatan() async {
-    try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login. Silakan login terlebih dahulu.');
-      }
-
-      // Get favorites from Hive
-      final favorites = await HiveService.getFavorites(userId);
-      if (favorites.isEmpty) return [];
-
-      List<Peralatan> favoritePeralatan = [];
+      // Convert peralatan to map for storage
+      final peralatanData = peralatan.toJson();
       
-      for (var favoriteData in favorites) {
-        try {
-          // Try to create Peralatan from stored data first
-          if (favoriteData.containsKey('id') && 
-              favoriteData.containsKey('nama') && 
-              favoriteData.containsKey('kategori')) {
-            favoritePeralatan.add(Peralatan.fromJson(favoriteData));
-          }
-        } catch (e) {
-          print('❌ Error parsing stored peralatan data: $e');
-          // If stored data is corrupted, try to fetch from API
-          if (favoriteData.containsKey('id')) {
-            try {
-              final response = await http.get(Uri.parse(
-                  '$_apiEndpoint/${favoriteData['id']}'));
-              
-              if (response.statusCode == 200) {
-                final peralatanData = json.decode(response.body);
-                favoritePeralatan.add(Peralatan.fromJson(peralatanData));
-              }
-            } catch (apiError) {
-              print('❌ Error fetching peralatan from API: $apiError');
-            }
-          }
-        }
-      }
+      await HiveService.addToFavorites(username, peralatan.id, peralatanData);
       
-      print('✅ Successfully loaded ${favoritePeralatan.length} favorite peralatan for user: $userId');
-      return favoritePeralatan;
-    } catch (e) {
-      print('❌ Error getting favorite peralatan: $e');
-      return [];
-    }
-  }
-
-  // Add peralatan to favorites using Hive
-  static Future<bool> addToFavorites(Peralatan peralatan) async {
-    try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login. Silakan login terlebih dahulu.');
-      }
-
-      // Check if already in favorites
-      if (await isFavorite(peralatan.id)) {
-        print('ℹ️ Peralatan ${peralatan.id} already in favorites for user: $userId');
-        return false;
-      }
-
-      // Add to Hive favorites
-      await HiveService.addToFavorites(userId, peralatan.id, peralatan.toJson());
-      print('✅ Added peralatan ${peralatan.id} to favorites for user: $userId');
-      return true;
+      print('✅ Added to favorites: ${peralatan.nama} for user: $username');
     } catch (e) {
       print('❌ Error adding to favorites: $e');
-      return false;
+      rethrow;
     }
   }
 
-  // Remove peralatan from favorites
-  static Future<bool> removeFromFavorites(String peralatanId) async {
+  /// Remove peralatan from favorites
+  static Future<void> removeFromFavorites(Peralatan peralatan) async {
     try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login. Silakan login terlebih dahulu.');
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        throw Exception('User tidak login.');
       }
 
-      // Check if in favorites
-      if (!await isFavorite(peralatanId)) {
-        print('ℹ️ Peralatan $peralatanId not in favorites for user: $userId');
-        return false;
-      }
-
-      // Remove from Hive favorites
-      await HiveService.removeFromFavorites(userId, peralatanId);
-      print('✅ Removed peralatan $peralatanId from favorites for user: $userId');
-      return true;
+      await HiveService.removeFromFavorites(username, peralatan.id);
+      
+      print('✅ Removed from favorites: ${peralatan.nama} for user: $username');
     } catch (e) {
       print('❌ Error removing from favorites: $e');
-      return false;
+      rethrow;
     }
   }
 
-  // Toggle favorite status
-  static Future<bool> toggleFavorite(Peralatan peralatan) async {
+  /// Toggle favorite status
+  static Future<void> toggleFavorite(Peralatan peralatan) async {
     try {
       final isFav = await isFavorite(peralatan.id);
       
       if (isFav) {
-        return await removeFromFavorites(peralatan.id);
+        await removeFromFavorites(peralatan);
       } else {
-        return await addToFavorites(peralatan);
+        await addToFavorites(peralatan);
       }
     } catch (e) {
       print('❌ Error toggling favorite: $e');
-      return false;
+      rethrow;
     }
   }
 
-  // Check if peralatan is favorite using Hive
+  /// Check if peralatan is in favorites
   static Future<bool> isFavorite(String peralatanId) async {
     try {
-      final userId = getCurrentUserId();
-      if (userId == null) return false;
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        return false;
+      }
 
-      final result = await HiveService.isFavorite(userId, peralatanId);
-      return result;
+      return await HiveService.isFavorite(username, peralatanId);
     } catch (e) {
       print('❌ Error checking favorite status: $e');
       return false;
     }
   }
 
-  // Clear all favorites for current user
-  static Future<void> clearAllFavorites() async {
+  /// Get all favorites for current user
+  static Future<List<Map<String, dynamic>>> getFavorites() async {
     try {
-      final userId = getCurrentUserId();
-      if (userId == null) return;
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        throw Exception('User tidak login.');
+      }
 
-      final favoritesBox = await HiveService.getFavoritesBox(userId);
-      await favoritesBox.clear();
-      print('✅ Cleared all favorites for user: $userId');
+      final favorites = await HiveService.getFavorites(username);
+      
+      print('✅ Retrieved ${favorites.length} favorites for user: $username');
+      return favorites;
     } catch (e) {
-      print('❌ Error clearing favorites: $e');
+      print('❌ Error getting favorites: $e');
+      return [];
     }
   }
 
-  // Get favorite count
-  static Future<int> getFavoriteCount() async {
+  /// Get favorites as Peralatan objects
+  static Future<List<Peralatan>> getFavoritesAsPeralatan() async {
     try {
-      final favoriteIds = await getFavoriteIds();
-      return favoriteIds.length;
+      final favoritesData = await getFavorites();
+      
+      final List<Peralatan> peralatanList = [];
+      
+      for (var data in favoritesData) {
+        try {
+          final peralatan = Peralatan.fromJson(data);
+          peralatanList.add(peralatan);
+        } catch (e) {
+          print('⚠️ Error parsing favorite peralatan: $e');
+          print('❌ Problematic data: $data');
+        }
+      }
+      
+      print('✅ Converted ${peralatanList.length} favorites to Peralatan objects');
+      return peralatanList;
     } catch (e) {
-      print('❌ Error getting favorite count: $e');
+      print('❌ Error converting favorites to Peralatan: $e');
+      return [];
+    }
+  }
+
+  /// Get favorites count
+  static Future<int> getFavoritesCount() async {
+    try {
+      final favorites = await getFavorites();
+      return favorites.length;
+    } catch (e) {
+      print('❌ Error getting favorites count: $e');
       return 0;
     }
   }
 
-  // Search in favorites
-  static Future<List<Peralatan>> searchFavorites(String query) async {
+  /// Clear all favorites
+  static Future<void> clearAllFavorites() async {
     try {
-      final favoritePeralatan = await getFavoritePeralatan();
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        throw Exception('User tidak login.');
+      }
+
+      final favorites = await getFavorites();
       
-      if (query.isEmpty) return favoritePeralatan;
+      for (var favorite in favorites) {
+        try {
+          final peralatanId = favorite['id'];
+          if (peralatanId != null) {
+            await HiveService.removeFromFavorites(username, peralatanId);
+          }
+        } catch (e) {
+          print('⚠️ Error removing favorite during clear: $e');
+        }
+      }
+      
+      print('✅ Cleared all favorites for user: $username');
+    } catch (e) {
+      print('❌ Error clearing favorites: $e');
+      rethrow;
+    }
+  }
+
+  /// Get favorites by category
+  static Future<List<Map<String, dynamic>>> getFavoritesByCategory(String category) async {
+    try {
+      final allFavorites = await getFavorites();
+      
+      final categoryFavorites = allFavorites.where((favorite) {
+        return favorite['kategori']?.toString().toLowerCase() == category.toLowerCase();
+      }).toList();
+      
+      print('✅ Found ${categoryFavorites.length} favorites in category: $category');
+      return categoryFavorites;
+    } catch (e) {
+      print('❌ Error getting favorites by category: $e');
+      return [];
+    }
+  }
+
+  /// Search favorites
+  static Future<List<Map<String, dynamic>>> searchFavorites(String query) async {
+    try {
+      final allFavorites = await getFavorites();
+      
+      if (query.isEmpty) return allFavorites;
       
       final searchLower = query.toLowerCase();
-      return favoritePeralatan.where((peralatan) {
-        return peralatan.nama.toLowerCase().contains(searchLower) ||
-               peralatan.kategori.toLowerCase().contains(searchLower) ||
-               peralatan.deskripsi.toLowerCase().contains(searchLower) ||
-               peralatan.lokasi.toLowerCase().contains(searchLower);
+      final searchResults = allFavorites.where((favorite) {
+        final nama = favorite['nama']?.toString().toLowerCase() ?? '';
+        final kategori = favorite['kategori']?.toString().toLowerCase() ?? '';
+        final deskripsi = favorite['deskripsi']?.toString().toLowerCase() ?? '';
+        
+        return nama.contains(searchLower) ||
+               kategori.contains(searchLower) ||
+               deskripsi.contains(searchLower);
       }).toList();
+      
+      print('✅ Search found ${searchResults.length} favorites for query: $query');
+      return searchResults;
     } catch (e) {
       print('❌ Error searching favorites: $e');
       return [];
     }
   }
 
-  // Filter favorites by category
-  static Future<List<Peralatan>> getFavoritesByCategory(String category) async {
-    try {
-      final favoritePeralatan = await getFavoritePeralatan();
-      
-      if (category.isEmpty || category.toLowerCase() == 'semua') {
-        return favoritePeralatan;
-      }
-      
-      return favoritePeralatan.where((peralatan) => 
-        peralatan.kategori.toLowerCase() == category.toLowerCase()
-      ).toList();
-    } catch (e) {
-      print('❌ Error filtering favorites by category: $e');
-      return [];
-    }
-  }
-
-  // Get favorite categories
+  /// Get favorite categories
   static Future<List<String>> getFavoriteCategories() async {
     try {
-      final favoritePeralatan = await getFavoritePeralatan();
-      final categories = favoritePeralatan
-          .map((peralatan) => peralatan.kategori)
+      final allFavorites = await getFavorites();
+      
+      final categories = allFavorites
+          .map((favorite) => favorite['kategori']?.toString())
+          .where((category) => category != null && category.isNotEmpty)
+          .cast<String>()
           .toSet()
           .toList();
       
       categories.sort();
+      
+      print('✅ Found ${categories.length} favorite categories');
       return categories;
     } catch (e) {
       print('❌ Error getting favorite categories: $e');
@@ -239,210 +219,319 @@ class FavoriteService {
     }
   }
 
-  // Sort favorites by different criteria
-  static Future<List<Peralatan>> sortFavorites(String sortBy) async {
+  /// Get most expensive favorite
+  static Future<Map<String, dynamic>?> getMostExpensiveFavorite() async {
     try {
-      final favoritePeralatan = await getFavoritePeralatan();
+      final allFavorites = await getFavorites();
       
-      switch (sortBy.toLowerCase()) {
-        case 'nama':
-          favoritePeralatan.sort((a, b) => a.nama.compareTo(b.nama));
-          break;
-        case 'kategori':
-          favoritePeralatan.sort((a, b) => a.kategori.compareTo(b.kategori));
-          break;
-        case 'harga':
-          favoritePeralatan.sort((a, b) => a.harga.compareTo(b.harga));
-          break;
-        case 'harga_desc':
-          favoritePeralatan.sort((a, b) => b.harga.compareTo(a.harga));
-          break;
-        case 'tahun':
-          favoritePeralatan.sort((a, b) => b.tahunDibeli.compareTo(a.tahunDibeli));
-          break;
-        case 'stok':
-          favoritePeralatan.sort((a, b) => b.stok.compareTo(a.stok));
-          break;
-        default:
-          favoritePeralatan.sort((a, b) => a.nama.compareTo(b.nama));
-      }
+      if (allFavorites.isEmpty) return null;
       
-      return favoritePeralatan;
-    } catch (e) {
-      print('❌ Error sorting favorites: $e');
-      return [];
-    }
-  }
-
-  // Get favorites with availability filter
-  static Future<List<Peralatan>> getAvailableFavorites() async {
-    try {
-      final favoritePeralatan = await getFavoritePeralatan();
-      return favoritePeralatan.where((peralatan) => peralatan.stok > 0).toList();
-    } catch (e) {
-      print('❌ Error getting available favorites: $e');
-      return [];
-    }
-  }
-
-  // Export favorites (untuk backup)
-  static Future<Map<String, dynamic>> exportFavorites() async {
-    try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login. Silakan login terlebih dahulu.');
-      }
-
-      final favorites = await HiveService.getFavorites(userId);
-      final favoriteIds = await getFavoriteIds();
-      final categories = await getFavoriteCategories();
+      Map<String, dynamic>? mostExpensive;
+      double maxPrice = 0;
       
-      return {
-        'userId': userId,
-        'favoriteIds': favoriteIds.toList(),
-        'favoriteData': favorites,
-        'categories': categories,
-        'exportDate': DateTime.now().toIso8601String(),
-        'count': favoriteIds.length,
-        'version': '1.0',
-      };
-    } catch (e) {
-      print('❌ Error exporting favorites: $e');
-      return {};
-    }
-  }
-
-  // Import favorites (untuk restore)
-  static Future<bool> importFavorites(Map<String, dynamic> data) async {
-    try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        throw Exception('User tidak login. Silakan login terlebih dahulu.');
-      }
-
-      final favoriteData = data['favoriteData'] as List<Map<String, dynamic>>?;
-      if (favoriteData == null) return false;
-
-      // Clear existing favorites
-      await clearAllFavorites();
-
-      // Add imported favorites
-      for (var peralatanData in favoriteData) {
-        if (peralatanData.containsKey('id')) {
-          await HiveService.addToFavorites(userId, peralatanData['id'], peralatanData);
+      for (var favorite in allFavorites) {
+        final price = _parsePrice(favorite['harga']);
+        if (price > maxPrice) {
+          maxPrice = price;
+          mostExpensive = favorite;
         }
       }
+      
+      print('✅ Most expensive favorite: ${mostExpensive?['nama']} - Rp ${maxPrice.toStringAsFixed(0)}');
+      return mostExpensive;
+    } catch (e) {
+      print('❌ Error getting most expensive favorite: $e');
+      return null;
+    }
+  }
 
-      print('✅ Imported ${favoriteData.length} favorites for user: $userId');
-      return true;
+  /// Get cheapest favorite
+  static Future<Map<String, dynamic>?> getCheapestFavorite() async {
+    try {
+      final allFavorites = await getFavorites();
+      
+      if (allFavorites.isEmpty) return null;
+      
+      Map<String, dynamic>? cheapest;
+      double minPrice = double.infinity;
+      
+      for (var favorite in allFavorites) {
+        final price = _parsePrice(favorite['harga']);
+        if (price < minPrice) {
+          minPrice = price;
+          cheapest = favorite;
+        }
+      }
+      
+      print('✅ Cheapest favorite: ${cheapest?['nama']} - Rp ${minPrice.toStringAsFixed(0)}');
+      return cheapest;
+    } catch (e) {
+      print('❌ Error getting cheapest favorite: $e');
+      return null;
+    }
+  }
+
+  /// Get average price of favorites
+  static Future<double> getAverageFavoritePrice() async {
+    try {
+      final allFavorites = await getFavorites();
+      
+      if (allFavorites.isEmpty) return 0.0;
+      
+      double totalPrice = 0.0;
+      int validCount = 0;
+      
+      for (var favorite in allFavorites) {
+        final price = _parsePrice(favorite['harga']);
+        if (price > 0) {
+          totalPrice += price;
+          validCount++;
+        }
+      }
+      
+      final averagePrice = validCount > 0 ? totalPrice / validCount : 0.0;
+      
+      print('✅ Average favorite price: Rp ${averagePrice.toStringAsFixed(0)}');
+      return averagePrice;
+    } catch (e) {
+      print('❌ Error calculating average favorite price: $e');
+      return 0.0;
+    }
+  }
+
+  /// Get favorites statistics
+  static Future<Map<String, dynamic>> getFavoritesStats() async {
+    try {
+      final allFavorites = await getFavorites();
+      final categories = await getFavoriteCategories();
+      final mostExpensive = await getMostExpensiveFavorite();
+      final cheapest = await getCheapestFavorite();
+      final averagePrice = await getAverageFavoritePrice();
+      
+      // Category breakdown
+      Map<String, int> categoryBreakdown = {};
+      for (var favorite in allFavorites) {
+        final category = favorite['kategori']?.toString() ?? 'Unknown';
+        categoryBreakdown[category] = (categoryBreakdown[category] ?? 0) + 1;
+      }
+      
+      // Price range analysis
+      final prices = allFavorites.map((f) => _parsePrice(f['harga'])).where((p) => p > 0).toList();
+      prices.sort();
+      
+      final stats = {
+        'total': allFavorites.length,
+        'categories': categories.length,
+        'categoryBreakdown': categoryBreakdown,
+        'mostExpensive': mostExpensive,
+        'cheapest': cheapest,
+        'averagePrice': averagePrice,
+        'priceRange': prices.isNotEmpty ? {
+          'min': prices.first,
+          'max': prices.last,
+          'median': prices.length > 0 ? prices[prices.length ~/ 2] : 0.0,
+        } : null,
+        'lastUpdated': DateTime.now().toIso8601String(),
+      };
+      
+      print('✅ Generated favorites statistics');
+      return stats;
+    } catch (e) {
+      print('❌ Error generating favorites stats: $e');
+      return {
+        'total': 0,
+        'categories': 0,
+        'error': e.toString(),
+        'lastUpdated': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
+  /// Check if favorites need sync (placeholder for future implementation)
+  static Future<bool> needsSync() async {
+    try {
+      // In a real app, this would check if local favorites are in sync with server
+      // For now, always return false
+      return false;
+    } catch (e) {
+      print('❌ Error checking sync status: $e');
+      return false;
+    }
+  }
+
+  /// Sync favorites with server (placeholder for future implementation)
+  static Future<void> syncFavorites() async {
+    try {
+      // In a real app, this would sync favorites with server
+      print('📡 Sync favorites feature not implemented yet');
+    } catch (e) {
+      print('❌ Error syncing favorites: $e');
+      rethrow;
+    }
+  }
+
+  /// Export favorites data
+  static Future<Map<String, dynamic>> exportFavorites() async {
+    try {
+      final username = UserService.getCurrentUsername();
+      final favorites = await getFavorites();
+      final stats = await getFavoritesStats();
+      
+      final exportData = {
+        'user': username,
+        'export_date': DateTime.now().toIso8601String(),
+        'version': '1.0',
+        'favorites': favorites,
+        'statistics': stats,
+      };
+      
+      print('✅ Exported ${favorites.length} favorites');
+      return exportData;
+    } catch (e) {
+      print('❌ Error exporting favorites: $e');
+      return {
+        'error': e.toString(),
+        'export_date': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
+  /// Import favorites data (placeholder for future implementation)
+  static Future<bool> importFavorites(Map<String, dynamic> data) async {
+    try {
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        throw Exception('User tidak login.');
+      }
+
+      if (!data.containsKey('favorites') || data['favorites'] is! List) {
+        throw Exception('Invalid favorites data format');
+      }
+
+      final favorites = data['favorites'] as List;
+      int importedCount = 0;
+      
+      for (var favoriteData in favorites) {
+        try {
+          if (favoriteData is Map<String, dynamic> && favoriteData.containsKey('id')) {
+            await HiveService.addToFavorites(username, favoriteData['id'], favoriteData);
+            importedCount++;
+          }
+        } catch (e) {
+          print('⚠️ Error importing favorite item: $e');
+        }
+      }
+      
+      print('✅ Imported $importedCount favorites');
+      return importedCount > 0;
     } catch (e) {
       print('❌ Error importing favorites: $e');
       return false;
     }
   }
 
-  // Check if user is logged in
-  static bool isUserLoggedIn() {
-    return UserService.isUserLoggedIn() && getCurrentUserId() != null;
-  }
-
-  // Initialize favorites for user (dipanggil saat login)
-  static Future<void> initializeFavoritesForUser(String userId) async {
-    try {
-      // Pastikan favorites box untuk user dibuka
-      await HiveService.getFavoritesBox(userId);
-      print('✅ Initialized favorites for user: $userId');
-    } catch (e) {
-      print('❌ Error initializing favorites for user: $e');
+  /// Helper method to parse price from various formats
+  static double _parsePrice(dynamic price) {
+    if (price == null) return 0.0;
+    
+    if (price is num) {
+      return price.toDouble();
     }
-  }
-
-  // Get favorite statistics
-  static Future<Map<String, dynamic>> getFavoriteStats() async {
-    try {
-      final userId = getCurrentUserId();
-      if (userId == null) return {};
-
-      final favoritePeralatan = await getFavoritePeralatan();
-      final categories = await getFavoriteCategories();
-      
-      // Calculate stats
-      int totalFavorites = favoritePeralatan.length;
-      int availableItems = favoritePeralatan.where((p) => p.stok > 0).length;
-      int totalValue = favoritePeralatan.fold(0, (sum, p) => sum + p.harga);
-      double avgPrice = totalFavorites > 0 ? totalValue / totalFavorites : 0;
-      
-      // Category breakdown
-      Map<String, int> categoryBreakdown = {};
-      for (var category in categories) {
-        categoryBreakdown[category] = favoritePeralatan
-            .where((p) => p.kategori == category)
-            .length;
-      }
-      
-      return {
-        'totalFavorites': totalFavorites,
-        'availableItems': availableItems,
-        'unavailableItems': totalFavorites - availableItems,
-        'totalValue': totalValue,
-        'averagePrice': avgPrice,
-        'categoriesCount': categories.length,
-        'categoryBreakdown': categoryBreakdown,
-        'lastUpdated': DateTime.now().toIso8601String(),
-      };
-    } catch (e) {
-      print('❌ Error getting favorite stats: $e');
-      return {};
+    
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed ?? 0.0;
     }
+    
+    return 0.0;
   }
 
-  // Get recommendations based on favorites
-  static Future<List<String>> getRecommendedCategories() async {
-    try {
-      final favoritePeralatan = await getFavoritePeralatan();
-      
-      // Count category frequency
-      Map<String, int> categoryCount = {};
-      for (var peralatan in favoritePeralatan) {
-        categoryCount[peralatan.kategori] = 
-            (categoryCount[peralatan.kategori] ?? 0) + 1;
-      }
-      
-      // Sort by frequency and return top categories
-      var sortedCategories = categoryCount.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      
-      return sortedCategories.map((entry) => entry.key).take(5).toList();
-    } catch (e) {
-      print('❌ Error getting recommended categories: $e');
-      return [];
-    }
-  }
-
-  // Debug method
+  /// Debug method to print favorites information
   static Future<void> printFavoritesDebug() async {
     try {
-      final userId = getCurrentUserId();
-      if (userId == null) {
-        print('🔍 Debug: No user logged in');
-        return;
+      final username = UserService.getCurrentUsername();
+      
+      print('🔍 === FAVORITES SERVICE DEBUG ===');
+      print('Current user: $username');
+      
+      if (username != null) {
+        final favorites = await getFavorites();
+        final stats = await getFavoritesStats();
+        
+        print('Total favorites: ${favorites.length}');
+        print('Statistics: $stats');
+        
+        if (favorites.isNotEmpty) {
+          print('Sample favorites:');
+          for (int i = 0; i < favorites.length && i < 3; i++) {
+            final fav = favorites[i];
+            print('  ${i + 1}. ${fav['nama']} - ${fav['kategori']} - Rp ${fav['harga']}');
+          }
+        }
+        
+        final categories = await getFavoriteCategories();
+        print('Favorite categories: ${categories.join(', ')}');
+      } else {
+        print('No user logged in');
+      }
+      
+      print('==============================');
+    } catch (e) {
+      print('❌ Error in favorites debug: $e');
+    }
+  }
+
+  /// Validate favorite data
+  static bool validateFavoriteData(Map<String, dynamic> data) {
+    final requiredFields = ['id', 'nama', 'kategori', 'harga'];
+    
+    for (String field in requiredFields) {
+      if (!data.containsKey(field) || data[field] == null) {
+        print('❌ Missing required field in favorite: $field');
+        return false;
+      }
+    }
+    
+    // Validate price
+    final price = _parsePrice(data['harga']);
+    if (price <= 0) {
+      print('❌ Invalid price in favorite: ${data['harga']}');
+      return false;
+    }
+    
+    return true;
+  }
+
+  /// Clean up invalid favorites
+  static Future<int> cleanupInvalidFavorites() async {
+    try {
+      final username = UserService.getCurrentUsername();
+      if (username == null) {
+        return 0;
       }
 
-      print('🔍 Debug Favorites for user: $userId');
-      final favoriteIds = await getFavoriteIds();
-      print('🔍 Favorite IDs: $favoriteIds');
+      final allFavorites = await getFavorites();
+      int removedCount = 0;
       
-      final favorites = await HiveService.getFavorites(userId);
-      print('🔍 Favorite data count: ${favorites.length}');
-      
-      for (var favorite in favorites) {
-        print('🔍 Favorite: ${favorite['id']} - ${favorite['nama']} (${favorite['kategori']})');
+      for (var favorite in allFavorites) {
+        if (!validateFavoriteData(favorite)) {
+          try {
+            final peralatanId = favorite['id'];
+            if (peralatanId != null) {
+              await HiveService.removeFromFavorites(username, peralatanId);
+              removedCount++;
+            }
+          } catch (e) {
+            print('⚠️ Error removing invalid favorite: $e');
+          }
+        }
       }
       
-      final stats = await getFavoriteStats();
-      print('🔍 Stats: $stats');
+      print('✅ Cleaned up $removedCount invalid favorites');
+      return removedCount;
     } catch (e) {
-      print('❌ Error in debug favorites: $e');
+      print('❌ Error cleaning up favorites: $e');
+      return 0;
     }
   }
 }

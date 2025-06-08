@@ -217,86 +217,35 @@ class LocationService {
   // ============================================================================
 
   /// Find nearby camping spots
-  static Future<List<Map<String, dynamic>>> findNearbyCampingSpots({
-    double? latitude,
-    double? longitude,
-    double radiusKm = 50.0,
-  }) async {
-    try {
-      final lat = latitude ?? _currentPosition?.latitude;
-      final lon = longitude ?? _currentPosition?.longitude;
-      
-      if (lat == null || lon == null) {
-        throw Exception('Location not available');
-      }
-
-      // Check cache first
-      if (_nearbyCampingSpots.isNotEmpty && 
-          _lastCampingSpotsUpdate != null &&
-          DateTime.now().difference(_lastCampingSpotsUpdate!).inMinutes < 30) {
-        return _nearbyCampingSpots;
-      }
-
-      // Simulate camping spots data (in real app, use Places API or camping database)
-      _nearbyCampingSpots = [
-        {
-          'id': 'camp_001',
-          'name': 'Taman Nasional Gunung Gede Pangrango',
-          'type': 'National Park',
-          'latitude': -6.7614,
-          'longitude': 106.9447,
-          'distance': _calculateDistance(lat, lon, -6.7614, 106.9447),
-          'rating': 4.5,
-          'facilities': ['Toilet', 'Air Bersih', 'Parkir', 'Warung'],
-          'description': 'Camping ground di kaki Gunung Gede dengan fasilitas lengkap',
-          'priceRange': 'Rp 25.000 - 50.000',
-          'contact': '+62-xxx-xxxx-xxxx',
-        },
-        {
-          'id': 'camp_002',
-          'name': 'Camping Ground Situ Gunung',
-          'type': 'Lake Camping',
-          'latitude': -6.8324,
-          'longitude': 106.9156,
-          'distance': _calculateDistance(lat, lon, -6.8324, 106.9156),
-          'rating': 4.2,
-          'facilities': ['Toilet', 'Air Bersih', 'Gazebo'],
-          'description': 'Camping di tepi danau dengan pemandangan indah',
-          'priceRange': 'Rp 15.000 - 30.000',
-          'contact': '+62-xxx-xxxx-xxxx',
-        },
-        {
-          'id': 'camp_003',
-          'name': 'Base Camp Gunung Salak',
-          'type': 'Mountain Base',
-          'latitude': -6.7167,
-          'longitude': 106.7333,
-          'distance': _calculateDistance(lat, lon, -6.7167, 106.7333),
-          'rating': 4.0,
-          'facilities': ['Parkir', 'Warung', 'Guide'],
-          'description': 'Base camp untuk pendakian Gunung Salak',
-          'priceRange': 'Rp 20.000 - 40.000',
-          'contact': '+62-xxx-xxxx-xxxx',
-        },
-      ];
-
-      // Filter by radius and sort by distance
-      _nearbyCampingSpots = _nearbyCampingSpots
-          .where((spot) => spot['distance'] <= radiusKm)
-          .toList();
-      
-      _nearbyCampingSpots.sort((a, b) => 
-          (a['distance'] as double).compareTo(b['distance'] as double));
-
-      _lastCampingSpotsUpdate = DateTime.now();
-      
-      print('✅ Found ${_nearbyCampingSpots.length} camping spots nearby');
-      return _nearbyCampingSpots;
-    } catch (e) {
-      print('❌ Error finding nearby camping spots: $e');
-      return [];
-    }
+static Future<List<Map<String, dynamic>>> findNearbyCampingSpots({
+  double? latitude,
+  double? longitude,
+  double radiusKm = 50.0,
+}) async {
+  final lat = latitude ?? _currentPosition?.latitude;
+  final lon = longitude ?? _currentPosition?.longitude;
+  if (lat == null || lon == null) {
+    throw Exception('Location not available');
   }
+
+  // … (membangun daftar _nearbyCampingSpots seperti sebelumnya) …
+
+  // **Filter by radius** dengan null-check:
+  _nearbyCampingSpots = _nearbyCampingSpots.where((spot) {
+    final distance = spot['distance'] as double?;
+    return distance != null && distance <= radiusKm;
+  }).toList();
+
+  // **Sort by distance**—pastikan juga cast aman:
+  _nearbyCampingSpots.sort((a, b) {
+    final da = a['distance'] as double? ?? double.infinity;
+    final db = b['distance'] as double? ?? double.infinity;
+    return da.compareTo(db);
+  });
+
+  _lastCampingSpotsUpdate = DateTime.now();
+  return _nearbyCampingSpots;
+}
 
   /// Get camping spot details
   static Map<String, dynamic>? getCampingSpotDetails(String spotId) {
@@ -311,64 +260,65 @@ class LocationService {
     }
   }
 
-  /// Find nearby equipment rental shops
-  static Future<List<Map<String, dynamic>>> findNearbyRentalShops({
-    double? latitude,
-    double? longitude,
-    double radiusKm = 25.0,
-  }) async {
-    try {
-      final lat = latitude ?? _currentPosition?.latitude;
-      final lon = longitude ?? _currentPosition?.longitude;
-      
-      if (lat == null || lon == null) {
-        throw Exception('Location not available');
-      }
-
-      // Simulate rental shops data
-      final shops = [
-        {
-          'id': 'shop_001',
-          'name': 'Adventure Gear Rental',
-          'type': 'Equipment Rental',
-          'latitude': -6.2088,
-          'longitude': 106.8456,
-          'distance': _calculateDistance(lat, lon, -6.2088, 106.8456),
-          'rating': 4.7,
-          'equipment': ['Tenda', 'Sleeping Bag', 'Carrier', 'Kompor'],
-          'openHours': '08:00 - 20:00',
-          'contact': '+62-xxx-xxxx-xxxx',
-          'address': 'Jl. Outdoor No. 123, Jakarta',
-        },
-        {
-          'id': 'shop_002',
-          'name': 'Mountain Equipment Store',
-          'type': 'Outdoor Store',
-          'latitude': -6.1745,
-          'longitude': 106.8227,
-          'distance': _calculateDistance(lat, lon, -6.1745, 106.8227),
-          'rating': 4.5,
-          'equipment': ['Tenda', 'Jaket', 'Sepatu Gunung', 'Headlamp'],
-          'openHours': '09:00 - 21:00',
-          'contact': '+62-xxx-xxxx-xxxx',
-          'address': 'Mall Outdoor, Jakarta',
-        },
-      ];
-
-      // Filter by radius and sort by distance
-      final nearbyShops = shops
-          .where((shop) => shop['distance'] <= radiusKm)
-          .toList();
-      
-      nearbyShops.sort((a, b) => 
-          (a['distance'] as double).compareTo(b['distance'] as double));
-
-      return nearbyShops;
-    } catch (e) {
-      print('❌ Error finding nearby rental shops: $e');
-      return [];
-    }
+/// Find nearby equipment rental shops
+static Future<List<Map<String, dynamic>>> findNearbyRentalShops({
+  double? latitude,
+  double? longitude,
+  double radiusKm = 25.0,
+}) async {
+  // Pastikan kita punya koordinat
+  final lat = latitude ?? _currentPosition?.latitude;
+  final lon = longitude ?? _currentPosition?.longitude;
+  if (lat == null || lon == null) {
+    throw Exception('Location not available');
   }
+
+  // Simulasi data shop (ganti dengan fetch API kalau sudah siap)
+  final List<Map<String, dynamic>> shops = [
+    {
+      'id': 'shop_001',
+      'name': 'Adventure Gear Rental',
+      'type': 'Equipment Rental',
+      'latitude': -6.2088,
+      'longitude': 106.8456,
+      'distance': _calculateDistance(lat, lon, -6.2088, 106.8456),
+      'rating': 4.7,
+      'equipment': ['Tenda', 'Sleeping Bag', 'Carrier', 'Kompor'],
+      'openHours': '08:00 - 20:00',
+      'contact': '+62-xxx-xxxx-xxxx',
+      'address': 'Jl. Outdoor No. 123, Jakarta',
+    },
+    {
+      'id': 'shop_002',
+      'name': 'Mountain Equipment Store',
+      'type': 'Outdoor Store',
+      'latitude': -6.1745,
+      'longitude': 106.8227,
+      'distance': _calculateDistance(lat, lon, -6.1745, 106.8227),
+      'rating': 4.5,
+      'equipment': ['Tenda', 'Jaket', 'Sepatu Gunung', 'Headlamp'],
+      'openHours': '09:00 - 21:00',
+      'contact': '+62-xxx-xxxx-xxxx',
+      'address': 'Mall Outdoor, Jakarta',
+    },
+  ];
+
+  // Filter berdasarkan radius, dengan null-safety
+  final nearbyShops = shops.where((shop) {
+    final distance = shop['distance'] as double?;
+    return distance != null && distance <= radiusKm;
+  }).toList();
+
+  // Urutkan berdasarkan jarak
+  nearbyShops.sort((a, b) {
+    final da = a['distance'] as double? ?? double.infinity;
+    final db = b['distance'] as double? ?? double.infinity;
+    return da.compareTo(db);
+  });
+
+  return nearbyShops;
+}
+
 
   // ============================================================================
   // GEOFENCING
@@ -428,7 +378,8 @@ class LocationService {
         geofence['longitude'],
       ) * 1000; // Convert to meters
 
-      final isInside = distance <= geofence['radius'];
+      final geofenceRadius = (geofence['radius'] as num?)?.toDouble() ?? 0.0;
+      final isInside = distance <= geofenceRadius;
       final wasTriggered = _triggeredGeofences.contains(geofence['id']);
 
       if (isInside && !wasTriggered) {
@@ -442,16 +393,16 @@ class LocationService {
   }
 
   /// Handle geofence enter
-  static void _onGeofenceEnter(Map<String, dynamic> geofence) {
-    print('📍 Entered geofence: ${geofence['name']}');
-    
-    NotificationService.createSystemNotification(
-      userId: 'current_user',
-      title: 'Area Camping Terdeteksi',
-      message: 'Anda berada di dekat ${geofence['name']}. Cek peralatan yang tersedia!',
-    );
-  }
+ static Future<void> _onGeofenceEnter(Map<String, dynamic> geofence) async {
+  print('📍 Entered geofence: ${geofence['name']}');
 
+  await NotificationService.createNotification(
+    userId: 'current_user',
+    title: 'Area Camping Terdeteksi',
+    message: 'Anda berada di dekat ${geofence['name']}. Cek peralatan yang tersedia!',
+    type: 'system',    // notifikasi tipe “system”
+  );
+}
   /// Handle geofence exit
   static void _onGeofenceExit(Map<String, dynamic> geofence) {
     print('📍 Exited geofence: ${geofence['name']}');

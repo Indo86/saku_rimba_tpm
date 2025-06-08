@@ -1,4 +1,4 @@
-// services/SearchService.dart (SakuRimba)
+// services/SearchService.dart (SakuRimba) - FIXED
 import '../models/Peralatan.dart';
 import '../services/ApiService.dart';
 import '../services/HiveService.dart';
@@ -42,7 +42,7 @@ class SearchService {
   // SEARCH FUNCTIONALITY
   // ============================================================================
 
-  /// Perform comprehensive search
+  /// Perform comprehensive search - FIXED: Now uses the corrected ApiService method
   static Future<Map<String, dynamic>> searchPeralatan({
     required String query,
     Map<String, dynamic>? filters,
@@ -65,14 +65,14 @@ class SearchService {
         ..._currentFilters,
       };
       
-      // Perform API search
+      // Perform API search - FIXED: Using the correct parameter names
       final results = await ApiService.searchPeralatan(
         query: query.isEmpty ? null : query,
-        kategori: searchFilters['kategori'],
-        lokasi: searchFilters['lokasi'],
-        minHarga: searchFilters['minHarga'],
-        maxHarga: searchFilters['maxHarga'],
-        tersedia: searchFilters['tersedia'],
+        kategori: searchFilters['kategori'] as String?,
+        lokasi: searchFilters['lokasi'] as String?,
+        minHarga: searchFilters['minHarga'] as int?,
+        maxHarga: searchFilters['maxHarga'] as int?,
+        tersedia: searchFilters['tersedia'] as bool?,
         page: page,
         limit: limit,
       );
@@ -208,6 +208,19 @@ class SearchService {
     }
   }
 
+  /// Search available items only
+  static Future<List<Peralatan>> searchAvailableOnly({String? query}) async {
+    try {
+      return await ApiService.searchPeralatan(
+        query: query,
+        tersedia: true,
+      );
+    } catch (e) {
+      print('❌ Error searching available items: $e');
+      return [];
+    }
+  }
+
   // ============================================================================
   // FILTERS AND SORTING
   // ============================================================================
@@ -267,6 +280,10 @@ class SearchService {
       case 'kategori':
       case 'category':
         results.sort((a, b) => a.kategori.compareTo(b.kategori));
+        break;
+      case 'lokasi':
+      case 'location':
+        results.sort((a, b) => a.lokasi.compareTo(b.lokasi));
         break;
       case 'relevance':
       default:
@@ -436,6 +453,10 @@ class SearchService {
       final categories = await ApiService.getCategories();
       suggestions.addAll(categories);
       
+      // Add locations as suggestions
+      final locations = await ApiService.getLocations();
+      suggestions.addAll(locations);
+      
       // Add popular search terms
       suggestions.addAll(_popularSearches);
       
@@ -451,6 +472,11 @@ class SearchService {
         'matras camping',
         'rain cover',
         'flysheet',
+        'peralatan masak',
+        'lampu emergency',
+        'tas gunung',
+        'ponco hujan',
+        'kompor portable',
       ]);
       
       // Remove duplicates and save
@@ -483,6 +509,10 @@ class SearchService {
         suggestions.addAll(['sepatu hiking', 'sepatu gunung', 'sepatu waterproof']);
       } else if (queryLower.contains('jaket')) {
         suggestions.addAll(['jaket outdoor', 'jaket waterproof', 'jaket windbreaker']);
+      } else if (queryLower.contains('kompor')) {
+        suggestions.addAll(['kompor gas', 'kompor portable', 'kompor multi-fuel']);
+      } else if (queryLower.contains('lampu')) {
+        suggestions.addAll(['headlamp', 'lampu LED', 'lampu emergency']);
       }
       
       return suggestions.take(5).toList();
@@ -529,6 +559,7 @@ class SearchService {
           'Coba kata kunci yang lebih umum',
           'Periksa ejaan kata kunci',
           'Gunakan nama kategori seperti "tenda" atau "carrier"',
+          'Coba cari berdasarkan lokasi',
         ],
       };
     }
@@ -560,7 +591,7 @@ class SearchService {
         'min': minPrice,
         'max': maxPrice,
       },
-      'availability': (availableCount / results.length * 100).round(),
+      'availability': results.isNotEmpty ? (availableCount / results.length * 100).round() : 0,
     };
   }
 

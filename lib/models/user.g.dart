@@ -1,4 +1,4 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
+// user.g.dart - GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'user.dart';
 
@@ -69,3 +69,4 @@ class UserAdapter extends TypeAdapter<User> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+

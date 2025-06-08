@@ -1,7 +1,7 @@
 // models/Notification.dart (SakuRimba)
 import 'package:hive/hive.dart';
 
-part 'Notification.g.dart';
+part 'notification.g.dart';
 
 @HiveType(typeId: 3)
 class Notification extends HiveObject {

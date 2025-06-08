@@ -1,148 +1,92 @@
-// services/ApiService.dart (SakuRimba)
+// services/ApiService.dart (SakuRimba) - FIXED
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/Peralatan.dart';
-import '../services/HiveService.dart';
 
 class ApiService {
-  // API Configuration
-  static const String _baseUrl = 'https://6839447d6561b8d882af9534.mockapi.io/api/project_tpm/peralatanRimba';
+  // Base URL for the API
+  static const String _baseUrl = 'https://6839447d6561b8d882af9534.mockapi.io/api/project_tpm';
+  
+  // API endpoints
+  static const String _peralatanEndpoint = '/peralatanRimba';
+  
+  // HTTP client timeout
   static const Duration _timeout = Duration(seconds: 30);
-  
-  // API Endpoints
-  static const String _peralatanEndpoint = '/peralatan';
-  static const String _kategoriesEndpoint = '/categories';
-  static const String _locationsEndpoint = '/locations';
-  
-  // Cache settings
-  static DateTime? _lastCacheUpdate;
-  static const Duration _cacheValidDuration = Duration(hours: 1);
-  
-  // Retry settings
-  static const int _maxRetries = 3;
-  static const Duration _retryDelay = Duration(seconds: 2);
 
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
-
-  /// Initialize API service
-  static Future<void> init() async {
+  /// Fetch all peralatan from API
+  static Future<List<Peralatan>> fetchPeralatan() async {
     try {
-      print('🌐 Initializing ApiService...');
-      
-      // Test API connectivity
-      await _testConnection();
-      
-      // Load cached data if available
-      await _loadCachedData();
-      
-      print('✅ ApiService initialized');
-    } catch (e) {
-      print('❌ Error initializing ApiService: $e');
-      // Continue with cached data if available
-    }
-  }
-
-  /// Test API connection
-  static Future<bool> _testConnection() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl$_peralatanEndpoint?page=1&limit=1'),
-        headers: _getHeaders(),
-      ).timeout(_timeout);
-      
-      final isConnected = response.statusCode == 200;
-      print(isConnected ? '✅ API connection successful' : '❌ API connection failed');
-      return isConnected;
-    } catch (e) {
-      print('❌ API connection test failed: $e');
-      return false;
-    }
-  }
-
-  // ============================================================================
-  // PERALATAN API METHODS
-  // ============================================================================
-
-  /// Get all peralatan with pagination
-  static Future<List<Peralatan>> getAllPeralatan({
-    int page = 1,
-    int limit = 20,
-    bool forceRefresh = false,
-  }) async {
-    try {
-      // Check cache first
-      if (!forceRefresh && _isCacheValid()) {
-        final cachedData = await _getCachedPeralatan();
-        if (cachedData.isNotEmpty) {
-          print('📱 Using cached peralatan data');
-          return cachedData;
-        }
-      }
-
       print('🌐 Fetching peralatan from API...');
       
-      final response = await _makeRequest(
-        'GET',
-        '$_peralatanEndpoint?page=$page&limit=$limit',
-      );
+      final url = Uri.parse('$_baseUrl$_peralatanEndpoint');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(_timeout);
 
-      if (response['success']) {
-        final List<dynamic> data = response['data'] as List<dynamic>;
-        final List<Peralatan> peralatanList = data
-            .map((json) => Peralatan.fromJson(json as Map<String, dynamic>))
-            .toList();
+      print('📡 API Response Status: ${response.statusCode}');
 
-        // Cache the data
-        await _cachePeralatan(peralatanList);
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonData = json.decode(response.body);
         
-        print('✅ Fetched ${peralatanList.length} peralatan items');
+        final List<Peralatan> peralatanList = jsonData.map((item) {
+          try {
+            return Peralatan.fromJson(item as Map<String, dynamic>);
+          } catch (e) {
+            print('⚠️ Error parsing peralatan item: $e');
+            print('❌ Problematic item: $item');
+            return null;
+          }
+        }).where((item) => item != null).cast<Peralatan>().toList();
+
+        print('✅ Successfully fetched ${peralatanList.length} peralatan items');
         return peralatanList;
       } else {
-        throw Exception('API response not successful: ${response['message']}');
+        throw Exception('Failed to load peralatan: ${response.statusCode} - ${response.reasonPhrase}');
       }
     } catch (e) {
-      print('❌ Error getting peralatan: $e');
+      print('❌ Error fetching peralatan: $e');
       
-      // Return cached data as fallback
-      final cachedData = await _getCachedPeralatan();
-      if (cachedData.isNotEmpty) {
-        print('📱 Returning cached data as fallback');
-        return cachedData;
-      }
-      
+      // Return empty list instead of mock data - let the app handle the fallback
       return [];
     }
   }
 
-  /// Get peralatan by ID
-  static Future<Peralatan?> getPeralatanById(String id) async {
+  /// Fetch single peralatan by ID
+  static Future<Peralatan?> fetchPeralatanById(String id) async {
     try {
       print('🌐 Fetching peralatan by ID: $id');
       
-      final response = await _makeRequest(
-        'GET',
-        '$_peralatanEndpoint/$id',
-      );
+      final url = Uri.parse('$_baseUrl$_peralatanEndpoint/$id');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(_timeout);
 
-      if (response['success']) {
-        final data = response['data'] as Map<String, dynamic>;
-        final peralatan = Peralatan.fromJson(data);
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonData = json.decode(response.body);
+        final peralatan = Peralatan.fromJson(jsonData);
         
-        print('✅ Fetched peralatan: ${peralatan.nama}');
+        print('✅ Successfully fetched peralatan: ${peralatan.nama}');
         return peralatan;
       } else {
-        throw Exception('API response not successful: ${response['message']}');
+        throw Exception('Failed to load peralatan: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting peralatan by ID: $e');
+      print('❌ Error fetching peralatan by ID: $e');
       return null;
     }
   }
 
-  /// Search peralatan
+  /// Enhanced search peralatan with multiple filters - FIXED: Added named parameters
   static Future<List<Peralatan>> searchPeralatan({
     String? query,
     String? kategori,
@@ -154,431 +98,265 @@ class ApiService {
     int limit = 20,
   }) async {
     try {
-      print('🔍 Searching peralatan with query: $query');
+      print('🔍 Searching peralatan with filters:');
+      if (query != null) print('  - Query: $query');
+      if (kategori != null) print('  - Kategori: $kategori');
+      if (lokasi != null) print('  - Lokasi: $lokasi');
+      if (minHarga != null) print('  - Min Harga: $minHarga');
+      if (maxHarga != null) print('  - Max Harga: $maxHarga');
+      if (tersedia != null) print('  - Tersedia: $tersedia');
       
-      // Build query parameters
-      Map<String, String> params = {
-        'page': page.toString(),
-        'limit': limit.toString(),
-      };
+      // For simplicity, fetch all and filter locally
+      // In a real API, this would be done server-side with query parameters
+      final allPeralatan = await fetchPeralatan();
       
+      List<Peralatan> filteredPeralatan = allPeralatan;
+      
+      // Apply text search filter
       if (query != null && query.isNotEmpty) {
-        params['search'] = query;
+        final queryLower = query.toLowerCase();
+        filteredPeralatan = filteredPeralatan.where((peralatan) {
+          return peralatan.nama.toLowerCase().contains(queryLower) ||
+                 peralatan.kategori.toLowerCase().contains(queryLower) ||
+                 peralatan.deskripsi.toLowerCase().contains(queryLower);
+        }).toList();
       }
+      
+      // Apply category filter
       if (kategori != null && kategori.isNotEmpty) {
-        params['kategori'] = kategori;
+        filteredPeralatan = filteredPeralatan.where((peralatan) {
+          return peralatan.kategori.toLowerCase() == kategori.toLowerCase();
+        }).toList();
       }
+      
+      // Apply location filter
       if (lokasi != null && lokasi.isNotEmpty) {
-        params['lokasi'] = lokasi;
+        filteredPeralatan = filteredPeralatan.where((peralatan) {
+          return peralatan.lokasi.toLowerCase().contains(lokasi.toLowerCase());
+        }).toList();
       }
+      
+      // Apply price range filter
       if (minHarga != null) {
-        params['minHarga'] = minHarga.toString();
+        filteredPeralatan = filteredPeralatan.where((peralatan) {
+          return peralatan.harga >= minHarga;
+        }).toList();
       }
+      
       if (maxHarga != null) {
-        params['maxHarga'] = maxHarga.toString();
+        filteredPeralatan = filteredPeralatan.where((peralatan) {
+          return peralatan.harga <= maxHarga;
+        }).toList();
       }
+      
+      // Apply availability filter
       if (tersedia != null) {
-        params['tersedia'] = tersedia.toString();
+        if (tersedia) {
+          filteredPeralatan = filteredPeralatan.where((peralatan) {
+            return peralatan.stok > 0;
+          }).toList();
+        } else {
+          filteredPeralatan = filteredPeralatan.where((peralatan) {
+            return peralatan.stok == 0;
+          }).toList();
+        }
       }
-
-      final queryString = params.entries
-          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
-          .join('&');
-
-      final response = await _makeRequest(
-        'GET',
-        '$_peralatanEndpoint?$queryString',
-      );
-
-      if (response['success']) {
-        final List<dynamic> data = response['data'] as List<dynamic>;
-        final List<Peralatan> results = data
-            .map((json) => Peralatan.fromJson(json as Map<String, dynamic>))
-            .toList();
-
-        print('✅ Search found ${results.length} results');
-        return results;
+      
+      // Apply pagination
+      final startIndex = (page - 1) * limit;
+      final endIndex = startIndex + limit;
+      
+      if (startIndex >= filteredPeralatan.length) {
+        filteredPeralatan = [];
+      } else if (endIndex >= filteredPeralatan.length) {
+        filteredPeralatan = filteredPeralatan.sublist(startIndex);
       } else {
-        throw Exception('Search failed: ${response['message']}');
+        filteredPeralatan = filteredPeralatan.sublist(startIndex, endIndex);
       }
+
+      print('✅ Found ${filteredPeralatan.length} matching peralatan');
+      return filteredPeralatan;
     } catch (e) {
       print('❌ Error searching peralatan: $e');
-      
-      // Fallback to local search in cached data
-      return await _searchInCachedData(query: query, kategori: kategori, lokasi: lokasi);
+      return [];
     }
+  }
+
+  /// Simple search method for backward compatibility
+  static Future<List<Peralatan>> simpleSearch(String query) async {
+    return searchPeralatan(query: query);
   }
 
   /// Get peralatan by category
-  static Future<List<Peralatan>> getPeralatanByCategory(String kategori) async {
+  static Future<List<Peralatan>> getPeralatanByCategory(String category) async {
     try {
-      return await searchPeralatan(kategori: kategori);
+      print('📂 Fetching peralatan by category: $category');
+      
+      return searchPeralatan(kategori: category);
     } catch (e) {
-      print('❌ Error getting peralatan by category: $e');
+      print('❌ Error fetching peralatan by category: $e');
       return [];
     }
   }
 
-  /// Get featured/popular peralatan
-  static Future<List<Peralatan>> getFeaturedPeralatan() async {
-    try {
-      print('🌟 Fetching featured peralatan...');
-      
-      final response = await _makeRequest(
-        'GET',
-        '$_peralatanEndpoint?featured=true&limit=10',
-      );
-
-      if (response['success']) {
-        final List<dynamic> data = response['data'] as List<dynamic>;
-        final List<Peralatan> featured = data
-            .map((json) => Peralatan.fromJson(json as Map<String, dynamic>))
-            .toList();
-
-        print('✅ Fetched ${featured.length} featured items');
-        return featured;
-      } else {
-        throw Exception('Failed to get featured items: ${response['message']}');
-      }
-    } catch (e) {
-      print('❌ Error getting featured peralatan: $e');
-      
-      // Return random items from cache as fallback
-      final cachedData = await _getCachedPeralatan();
-      if (cachedData.length > 5) {
-        cachedData.shuffle();
-        return cachedData.take(5).toList();
-      }
-      
-      return [];
-    }
-  }
-
-  // ============================================================================
-  // CATEGORIES AND LOCATIONS API
-  // ============================================================================
-
-  /// Get all categories
+  /// Get available categories
   static Future<List<String>> getCategories() async {
     try {
-      print('🏷️ Fetching categories...');
+      final allPeralatan = await fetchPeralatan();
       
-      final response = await _makeRequest('GET', _kategoriesEndpoint);
-
-      if (response['success']) {
-        final List<dynamic> data = response['data'] as List<dynamic>;
-        final categories = data.cast<String>();
-        
-        print('✅ Fetched ${categories.length} categories');
-        return categories;
-      } else {
-        throw Exception('Failed to get categories: ${response['message']}');
+      if (allPeralatan.isEmpty) {
+        // Return default categories if no data from API
+        return ['Tenda', 'Sleeping Bag', 'Kompor', 'Carrier', 'Peralatan Masak', 'Lampu'];
       }
-    } catch (e) {
-      print('❌ Error getting categories: $e');
       
-      // Return default categories as fallback
-      return [
-        'Tenda',
-        'Sleeping Bag',
-        'Carrier',
-        'Kompor',
-        'Pakaian',
-        'Sepatu',
-        'Aksesoris',
-        'Elektronik',
-        'Peralatan Masak',
-        'Safety Equipment',
-      ];
+      final categories = allPeralatan
+          .map((peralatan) => peralatan.kategori)
+          .toSet()
+          .toList();
+      
+      categories.sort();
+      
+      print('✅ Found ${categories.length} categories');
+      return categories;
+    } catch (e) {
+      print('❌ Error fetching categories: $e');
+      return ['Tenda', 'Sleeping Bag', 'Kompor', 'Carrier', 'Peralatan Masak', 'Lampu'];
     }
   }
 
-  /// Get all locations
+  /// Get available locations
   static Future<List<String>> getLocations() async {
     try {
-      print('📍 Fetching locations...');
+      final allPeralatan = await fetchPeralatan();
       
-      final response = await _makeRequest('GET', _locationsEndpoint);
-
-      if (response['success']) {
-        final List<dynamic> data = response['data'] as List<dynamic>;
-        final locations = data.cast<String>();
-        
-        print('✅ Fetched ${locations.length} locations');
-        return locations;
-      } else {
-        throw Exception('Failed to get locations: ${response['message']}');
+      if (allPeralatan.isEmpty) {
+        return ['Jakarta', 'Bandung', 'Yogyakarta', 'Surabaya', 'Medan'];
       }
-    } catch (e) {
-      print('❌ Error getting locations: $e');
       
-      // Return default locations as fallback
-      return [
-        'Jakarta',
-        'Bogor',
-        'Bandung',
-        'Sukabumi',
-        'Cianjur',
-        'Garut',
-        'Tasikmalaya',
-        'Cirebon',
-        'Bekasi',
-        'Depok',
-      ];
+      final locations = allPeralatan
+          .map((peralatan) => peralatan.lokasi)
+          .toSet()
+          .toList();
+      
+      locations.sort();
+      
+      print('✅ Found ${locations.length} locations');
+      return locations;
+    } catch (e) {
+      print('❌ Error fetching locations: $e');
+      return ['Jakarta', 'Bandung', 'Yogyakarta', 'Surabaya', 'Medan'];
     }
   }
 
-  // ============================================================================
-  // UTILITY METHODS
-  // ============================================================================
-
-  /// Make HTTP request with retry logic
-  static Future<Map<String, dynamic>> _makeRequest(
-    String method,
-    String endpoint, {
-    Map<String, dynamic>? body,
-    int retryCount = 0,
-  }) async {
+  /// Get price range statistics
+  static Future<Map<String, int>> getPriceRange() async {
     try {
-      final uri = Uri.parse('$_baseUrl$endpoint');
-      final headers = _getHeaders();
+      final allPeralatan = await fetchPeralatan();
       
-      http.Response response;
+      if (allPeralatan.isEmpty) {
+        return {'min': 25000, 'max': 100000};
+      }
       
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await http.get(uri, headers: headers).timeout(_timeout);
-          break;
-        case 'POST':
-          response = await http.post(
-            uri,
-            headers: headers,
-            body: body != null ? json.encode(body) : null,
-          ).timeout(_timeout);
-          break;
-        case 'PUT':
-          response = await http.put(
-            uri,
-            headers: headers,
-            body: body != null ? json.encode(body) : null,
-          ).timeout(_timeout);
-          break;
-        case 'DELETE':
-          response = await http.delete(uri, headers: headers).timeout(_timeout);
-          break;
-        default:
-          throw Exception('Unsupported HTTP method: $method');
-      }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = json.decode(response.body);
-        return {
-          'success': true,
-          'data': data,
-          'statusCode': response.statusCode,
-        };
-      } else {
-        throw HttpException(
-          'HTTP ${response.statusCode}: ${response.reasonPhrase}',
-          uri: uri,
-        );
-      }
-    } catch (e) {
-      print('❌ Request failed (attempt ${retryCount + 1}): $e');
-      
-      // Retry logic
-      if (retryCount < _maxRetries && _shouldRetry(e)) {
-        print('🔄 Retrying in ${_retryDelay.inSeconds} seconds...');
-        await Future.delayed(_retryDelay);
-        return _makeRequest(method, endpoint, body: body, retryCount: retryCount + 1);
-      }
+      final prices = allPeralatan.map((p) => p.harga).toList();
+      prices.sort();
       
       return {
-        'success': false,
-        'error': e.toString(),
-        'message': 'Request failed after ${retryCount + 1} attempts',
+        'min': prices.first,
+        'max': prices.last,
       };
+    } catch (e) {
+      print('❌ Error getting price range: $e');
+      return {'min': 25000, 'max': 100000};
     }
   }
 
-  /// Get HTTP headers
-  static Map<String, String> _getHeaders() {
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'User-Agent': 'SakuRimba/1.0',
-    };
-  }
-
-  /// Check if error should trigger retry
-  static bool _shouldRetry(dynamic error) {
-    if (error is SocketException) return true;
-    if (error is TimeoutException) return true;
-    if (error is HttpException) {
-      // Retry on server errors (5xx)
-      return error.message.contains('5');
-    }
-    return false;
-  }
-
-  // ============================================================================
-  // CACHING METHODS
-  // ============================================================================
-
-  /// Check if cache is valid
-  static bool _isCacheValid() {
-    if (_lastCacheUpdate == null) return false;
-    return DateTime.now().difference(_lastCacheUpdate!) < _cacheValidDuration;
-  }
-
-  /// Load cached data from Hive
-  static Future<void> _loadCachedData() async {
+  /// Check API connection
+  static Future<bool> checkConnection() async {
     try {
-      final lastUpdate = await HiveService.getSetting<String>('api_cache_last_update');
-      if (lastUpdate != null) {
-        _lastCacheUpdate = DateTime.parse(lastUpdate);
-      }
+      final url = Uri.parse('$_baseUrl$_peralatanEndpoint');
       
-      print('✅ Cached data loaded');
-    } catch (e) {
-      print('❌ Error loading cached data: $e');
-    }
-  }
+      final response = await http.head(url).timeout(
+        const Duration(seconds: 10),
+      );
 
-  /// Cache peralatan data
-  static Future<void> _cachePeralatan(List<Peralatan> peralatanList) async {
-    try {
-      final jsonList = peralatanList.map((p) => p.toJson()).toList();
-      await HiveService.saveSetting('cached_peralatan', jsonList);
-      await HiveService.saveSetting('api_cache_last_update', DateTime.now().toIso8601String());
-      
-      _lastCacheUpdate = DateTime.now();
-      print('✅ Peralatan data cached (${peralatanList.length} items)');
+      return response.statusCode == 200;
     } catch (e) {
-      print('❌ Error caching peralatan data: $e');
-    }
-  }
-
-  /// Get cached peralatan data
-  static Future<List<Peralatan>> _getCachedPeralatan() async {
-    try {
-      final cachedData = await HiveService.getSetting<List<dynamic>>('cached_peralatan');
-      if (cachedData != null) {
-        return cachedData
-            .map((json) => Peralatan.fromJson(Map<String, dynamic>.from(json)))
-            .toList();
-      }
-      return [];
-    } catch (e) {
-      print('❌ Error getting cached peralatan: $e');
-      return [];
-    }
-  }
-
-  /// Search in cached data (fallback)
-  static Future<List<Peralatan>> _searchInCachedData({
-    String? query,
-    String? kategori,
-    String? lokasi,
-  }) async {
-    try {
-      final cachedData = await _getCachedPeralatan();
-      
-      return cachedData.where((peralatan) {
-        bool matches = true;
-        
-        if (query != null && query.isNotEmpty) {
-          final searchLower = query.toLowerCase();
-          matches = matches && (
-            peralatan.nama.toLowerCase().contains(searchLower) ||
-            peralatan.deskripsi.toLowerCase().contains(searchLower)
-          );
-        }
-        
-        if (kategori != null && kategori.isNotEmpty) {
-          matches = matches && peralatan.kategori.toLowerCase() == kategori.toLowerCase();
-        }
-        
-        if (lokasi != null && lokasi.isNotEmpty) {
-          matches = matches && peralatan.lokasi.toLowerCase().contains(lokasi.toLowerCase());
-        }
-        
-        return matches;
-      }).toList();
-    } catch (e) {
-      print('❌ Error searching cached data: $e');
-      return [];
-    }
-  }
-
-  // ============================================================================
-  // CONNECTIVITY AND STATUS
-  // ============================================================================
-
-  /// Check internet connectivity
-  static Future<bool> checkConnectivity() async {
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } catch (e) {
+      print('❌ API connection check failed: $e');
       return false;
     }
   }
 
-  /// Get API service status
-  static Future<Map<String, dynamic>> getServiceStatus() async {
-    final isConnected = await checkConnectivity();
-    final isApiReachable = await _testConnection();
-    
-    return {
-      'internetConnected': isConnected,
-      'apiReachable': isApiReachable,
-      'cacheValid': _isCacheValid(),
-      'lastCacheUpdate': _lastCacheUpdate?.toIso8601String(),
-      'baseUrl': _baseUrl,
-    };
-  }
-
-  /// Clear cache
-  static Future<void> clearCache() async {
+  /// Get API health status
+  static Future<Map<String, dynamic>> getApiHealth() async {
     try {
-      final settingsBox = await HiveService.getSettingsBox();
-      await settingsBox.delete('cached_peralatan');
-      await settingsBox.delete('api_cache_last_update');
+      final isConnected = await checkConnection();
+      final startTime = DateTime.now();
       
-      _lastCacheUpdate = null;
-      print('✅ API cache cleared');
+      if (isConnected) {
+        final peralatan = await fetchPeralatan();
+        final endTime = DateTime.now();
+        final responseTime = endTime.difference(startTime).inMilliseconds;
+        
+        return {
+          'status': 'healthy',
+          'connected': true,
+          'response_time_ms': responseTime,
+          'data_count': peralatan.length,
+          'last_check': DateTime.now().toIso8601String(),
+        };
+      } else {
+        return {
+          'status': 'unhealthy',
+          'connected': false,
+          'response_time_ms': null,
+          'data_count': 0,
+          'last_check': DateTime.now().toIso8601String(),
+          'fallback_needed': true,
+        };
+      }
     } catch (e) {
-      print('❌ Error clearing cache: $e');
+      return {
+        'status': 'error',
+        'connected': false,
+        'error': e.toString(),
+        'last_check': DateTime.now().toIso8601String(),
+        'fallback_needed': true,
+      };
     }
   }
 
-  /// Force refresh data
-  static Future<List<Peralatan>> forceRefreshPeralatan() async {
-    print('🔄 Force refreshing peralatan data...');
-    return await getAllPeralatan(forceRefresh: true);
-  }
-
-  // ============================================================================
-  // DEBUG METHODS
-  // ============================================================================
-
-  /// Debug print API information
+  /// Debug method to print API information
   static Future<void> printApiDebug() async {
     try {
       print('🔍 === API SERVICE DEBUG ===');
+      print('Base URL: $_baseUrl');
+      print('Peralatan Endpoint: $_peralatanEndpoint');
+      print('Timeout: $_timeout');
       
-      final status = await getServiceStatus();
-      print('🔍 Status: $status');
+      final health = await getApiHealth();
+      print('API Health: $health');
       
-      final cachedData = await _getCachedPeralatan();
-      print('🔍 Cached peralatan count: ${cachedData.length}');
-      
-      final categories = await getCategories();
-      print('🔍 Available categories: $categories');
-      
-      final locations = await getLocations();
-      print('🔍 Available locations: $locations');
+      if (health['connected'] == true) {
+        final peralatan = await fetchPeralatan();
+        print('Total Peralatan: ${peralatan.length}');
+        
+        final categories = await getCategories();
+        print('Categories: ${categories.join(', ')}');
+        
+        final locations = await getLocations();
+        print('Locations: ${locations.join(', ')}');
+        
+        final priceRange = await getPriceRange();
+        print('Price Range: ${priceRange['min']} - ${priceRange['max']}');
+        
+        // Sample peralatan info
+        if (peralatan.isNotEmpty) {
+          final sample = peralatan.first;
+          print('Sample Peralatan: ${sample.nama} - ${sample.kategori}');
+        }
+      } else {
+        print('⚠️ API not accessible - app should handle fallback');
+      }
       
       print('==============================');
     } catch (e) {
@@ -586,42 +364,96 @@ class ApiService {
     }
   }
 
-  /// Get cache statistics
-  static Future<Map<String, dynamic>> getCacheStats() async {
+  /// Validate peralatan data
+  static bool validatePeralatan(Map<String, dynamic> data) {
+    final requiredFields = ['id', 'nama', 'kategori', 'harga', 'stok'];
+    
+    for (String field in requiredFields) {
+      if (!data.containsKey(field) || data[field] == null) {
+        print('❌ Missing required field: $field');
+        return false;
+      }
+    }
+    
+    // Validate data types
+    if (data['harga'] is! int && data['harga'] is! num) {
+      print('❌ Invalid harga type: ${data['harga'].runtimeType}');
+      return false;
+    }
+    
+    if (data['stok'] is! int && data['stok'] is! num) {
+      print('❌ Invalid stok type: ${data['stok'].runtimeType}');
+      return false;
+    }
+    
+    return true;
+  }
+
+  /// Retry mechanism for failed requests
+  static Future<T> _retryRequest<T>(
+    Future<T> Function() request, {
+    int maxRetries = 3,
+    Duration delay = const Duration(seconds: 2),
+  }) async {
+    int attempt = 0;
+    
+    while (attempt < maxRetries) {
+      try {
+        return await request();
+      } catch (e) {
+        attempt++;
+        
+        if (attempt >= maxRetries) {
+          print('❌ Max retries reached ($maxRetries). Last error: $e');
+          rethrow;
+        }
+        
+        print('⚠️ Request failed (attempt $attempt/$maxRetries): $e');
+        print('⏳ Retrying in ${delay.inSeconds} seconds...');
+        
+        await Future.delayed(delay);
+      }
+    }
+    
+    throw Exception('Retry mechanism failed unexpectedly');
+  }
+
+  /// Fetch peralatan with retry mechanism
+  static Future<List<Peralatan>> fetchPeralatanWithRetry() async {
+    return _retryRequest(() => fetchPeralatan());
+  }
+
+  /// Get fresh data (bypass any caching)
+  static Future<List<Peralatan>> getFreshPeralatan() async {
     try {
-      final cachedData = await _getCachedPeralatan();
+      print('🔄 Fetching fresh peralatan data...');
       
-      if (cachedData.isEmpty) {
-        return {'message': 'No cached data available'};
+      final url = Uri.parse('$_baseUrl$_peralatanEndpoint?_=${DateTime.now().millisecondsSinceEpoch}');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      ).timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonData = json.decode(response.body);
+        
+        final List<Peralatan> peralatanList = jsonData.map((item) {
+          return Peralatan.fromJson(item as Map<String, dynamic>);
+        }).toList();
+
+        print('✅ Fresh data fetched: ${peralatanList.length} items');
+        return peralatanList;
+      } else {
+        throw Exception('Failed to fetch fresh data: ${response.statusCode}');
       }
-      
-      // Analyze cached data
-      final categories = <String, int>{};
-      final locations = <String, int>{};
-      int totalItems = cachedData.length;
-      int availableItems = 0;
-      
-      for (var peralatan in cachedData) {
-        categories[peralatan.kategori] = (categories[peralatan.kategori] ?? 0) + 1;
-        locations[peralatan.lokasi] = (locations[peralatan.lokasi] ?? 0) + 1;
-        if (peralatan.stok > 0) availableItems++;
-      }
-      
-      return {
-        'totalItems': totalItems,
-        'availableItems': availableItems,
-        'categoriesCount': categories.length,
-        'locationsCount': locations.length,
-        'categoryBreakdown': categories,
-        'locationBreakdown': locations,
-        'cacheAge': _lastCacheUpdate != null 
-            ? DateTime.now().difference(_lastCacheUpdate!).inMinutes 
-            : null,
-        'isValid': _isCacheValid(),
-      };
     } catch (e) {
-      print('❌ Error getting cache stats: $e');
-      return {'error': e.toString()};
+      print('❌ Error fetching fresh data: $e');
+      return [];
     }
   }
 }

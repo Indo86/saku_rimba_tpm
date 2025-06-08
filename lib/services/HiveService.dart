@@ -2,7 +2,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/user.dart';
 import '../models/rent.dart';
-import '../models/Notification.dart';
+import '../models/notification.dart';
 
 class HiveService {
   static const String _userBoxName = 'user_objects';
