@@ -142,13 +142,18 @@ class _FavoritePageState extends State<FavoritePage>
             const SizedBox(width: 8),
             Text(
               'Hapus Favorit',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800], // FIXED: Dark readable text
+              ),
             ),
           ],
         ),
         content: Text(
           'Apakah Anda yakin ingin menghapus "$peralatanNama" dari favorit?',
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700], // FIXED: Dark readable text
+          ),
         ),
         actions: [
           TextButton(
@@ -209,6 +214,7 @@ class _FavoritePageState extends State<FavoritePage>
         style: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
           fontSize: 20,
+          color: Colors.white, // FIXED: Ensure white text
         ),
       ),
       backgroundColor: Colors.teal[800],
@@ -217,7 +223,7 @@ class _FavoritePageState extends State<FavoritePage>
       actions: [
         if (_favoriteItems.isNotEmpty)
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _loadFavorites,
             tooltip: 'Refresh',
           ),
@@ -274,7 +280,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
+                color: Colors.grey[700], // FIXED: Readable color
               ),
             ),
             const SizedBox(height: 12),
@@ -337,7 +343,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
+                color: Colors.grey[700], // FIXED: Readable color
               ),
             ),
             const SizedBox(height: 8),
@@ -356,6 +362,10 @@ class _FavoritePageState extends State<FavoritePage>
               label: Text(
                 'Coba Lagi',
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal[600],
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -382,7 +392,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
+                color: Colors.grey[700], // FIXED: Readable color
               ),
             ),
             const SizedBox(height: 12),
@@ -430,11 +440,12 @@ class _FavoritePageState extends State<FavoritePage>
   Widget _buildFavoriteCard(Map<String, dynamic> item) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      shadowColor: Colors.black26,
+      elevation: 3, // FIXED: Reduced elevation
+      shadowColor: Colors.black12, // FIXED: Lighter shadow
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      color: Colors.white, // FIXED: Ensure white background
       child: InkWell(
         onTap: () {
           try {
@@ -475,12 +486,12 @@ class _FavoritePageState extends State<FavoritePage>
                           onError: (exception, stackTrace) {},
                         )
                       : null,
-                  color: Colors.grey[300],
+                  color: Colors.grey[200], // FIXED: Lighter placeholder color
                 ),
                 child: item['image'] == null || item['image'].isEmpty
                     ? Icon(
                         Icons.image_not_supported,
-                        color: Colors.grey[500],
+                        color: Colors.grey[400], // FIXED: Lighter icon color
                         size: 32,
                       )
                     : null,
@@ -498,6 +509,7 @@ class _FavoritePageState extends State<FavoritePage>
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
+                        color: Colors.grey[800], // FIXED: Dark readable text
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -529,9 +541,15 @@ class _FavoritePageState extends State<FavoritePage>
                           ),
                           decoration: BoxDecoration(
                             color: (item['stok'] ?? 0) > 0 
-                                ? Colors.green[100] 
-                                : Colors.red[100],
+                                ? Colors.green[50] // FIXED: Lighter background
+                                : Colors.red[50],
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: (item['stok'] ?? 0) > 0 
+                                  ? Colors.green[200]!
+                                  : Colors.red[200]!,
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             'Stok: ${item['stok'] ?? 0}',
@@ -553,18 +571,25 @@ class _FavoritePageState extends State<FavoritePage>
               const SizedBox(width: 8),
               
               // Remove button
-              IconButton(
-                onPressed: () {
-                  _showRemoveConfirmation(
-                    item['id'] ?? '',
-                    item['nama'] ?? 'Item',
-                  );
-                },
-                icon: const Icon(
-                  Icons.favorite,
-                  color: Colors.red,
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.red[50], // FIXED: Light background
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red[200]!, width: 1),
                 ),
-                tooltip: 'Hapus dari favorit',
+                child: IconButton(
+                  onPressed: () {
+                    _showRemoveConfirmation(
+                      item['id'] ?? '',
+                      item['nama'] ?? 'Item',
+                    );
+                  },
+                  icon: Icon(
+                    Icons.favorite,
+                    color: Colors.red[600],
+                  ),
+                  tooltip: 'Hapus dari favorit',
+                ),
               ),
             ],
           ),

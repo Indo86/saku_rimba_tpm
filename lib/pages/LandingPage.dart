@@ -94,8 +94,9 @@ class _LandingPageState extends State<LandingPage>
             .toLowerCase()
             .contains(_searchController.text.toLowerCase());
         
+        // FIXED: Proper category filtering
         final matchesCategory = _selectedCategory == 'Semua' ||
-            peralatan.kategori == _selectedCategory;
+            peralatan.kategori.toLowerCase() == _selectedCategory.toLowerCase();
         
         return matchesSearch && matchesCategory;
       }).toList();
@@ -140,6 +141,7 @@ class _LandingPageState extends State<LandingPage>
         style: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
           fontSize: 24,
+          color: Colors.white, // FIXED: Ensure white text
         ),
       ),
       backgroundColor: Colors.teal[800],
@@ -147,13 +149,13 @@ class _LandingPageState extends State<LandingPage>
       elevation: 0,
       actions: [
         IconButton(
-          icon: const Icon(Icons.notifications_outlined),
+          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
           onPressed: () {
             // Navigate to notifications
           },
         ),
         IconButton(
-          icon: const Icon(Icons.person_outline),
+          icon: const Icon(Icons.person_outline, color: Colors.white),
           onPressed: () {
             if (UserService.isUserLoggedIn()) {
               // Navigate to profile
@@ -245,10 +247,16 @@ class _LandingPageState extends State<LandingPage>
           TextField(
             controller: _searchController,
             onChanged: (_) => _onSearchChanged(),
-            style: GoogleFonts.poppins(),
+            style: GoogleFonts.poppins(
+              color: Colors.black87, // FIXED: Dark text for readability
+              fontSize: 14,
+            ),
             decoration: InputDecoration(
               hintText: 'Cari tenda, sleeping bag, kompor...',
-              hintStyle: GoogleFonts.poppins(color: Colors.grey[600]),
+              hintStyle: GoogleFonts.poppins(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
               prefixIcon: Icon(Icons.search, color: Colors.teal[600]),
               filled: true,
               fillColor: Colors.white,
@@ -287,15 +295,20 @@ class _LandingPageState extends State<LandingPage>
                 style: GoogleFonts.poppins(
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected ? Colors.white : Colors.teal[700],
+                  fontSize: 13,
                 ),
               ),
               selected: isSelected,
               onSelected: (_) => _onCategoryChanged(category),
-              backgroundColor: Colors.grey[200],
+              backgroundColor: Colors.white, // FIXED: Light background
               selectedColor: Colors.teal[600],
               checkmarkColor: Colors.white,
               elevation: isSelected ? 4 : 1,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(
+                color: isSelected ? Colors.teal[600]! : Colors.grey[300]!,
+                width: 1,
+              ),
             ),
           );
         },
@@ -305,11 +318,12 @@ class _LandingPageState extends State<LandingPage>
 
   Widget _buildPeralatanCard(Peralatan peralatan) {
     return Card(
-      elevation: 4,
-      shadowColor: Colors.black26,
+      elevation: 3, // FIXED: Reduced elevation for lighter appearance
+      shadowColor: Colors.black12, // FIXED: Lighter shadow
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      color: Colors.white, // FIXED: Ensure white background
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -344,12 +358,12 @@ class _LandingPageState extends State<LandingPage>
                     // Fallback for broken images
                     if (peralatan.image.isEmpty)
                       Container(
-                        color: Colors.grey[300],
-                        child: const Center(
+                        color: Colors.grey[200], // FIXED: Lighter placeholder
+                        child: Center(
                           child: Icon(
                             Icons.image_not_supported,
-                            color: Colors.grey,
-                            size: 48,
+                            color: Colors.grey[400],
+                            size: 32,
                           ),
                         ),
                       ),
@@ -372,7 +386,7 @@ class _LandingPageState extends State<LandingPage>
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.red,
+                            color: Colors.red[600],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -403,6 +417,7 @@ class _LandingPageState extends State<LandingPage>
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
+                        color: Colors.grey[800], // FIXED: Dark readable text
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -419,12 +434,14 @@ class _LandingPageState extends State<LandingPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Rp ${peralatan.harga.toString()}/hari',
-                          style: GoogleFonts.poppins(
-                            color: Colors.teal[700],
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                        Expanded(
+                          child: Text(
+                            'Rp ${peralatan.harga.toString()}/hari',
+                            style: GoogleFonts.poppins(
+                              color: Colors.teal[700],
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                         Container(
@@ -434,9 +451,15 @@ class _LandingPageState extends State<LandingPage>
                           ),
                           decoration: BoxDecoration(
                             color: peralatan.stok > 0 
-                                ? Colors.green[100] 
-                                : Colors.red[100],
+                                ? Colors.green[50] // FIXED: Lighter background
+                                : Colors.red[50],
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: peralatan.stok > 0 
+                                  ? Colors.green[200]!
+                                  : Colors.red[200]!,
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             'Stok: ${peralatan.stok}',
@@ -498,13 +521,20 @@ class _LandingPageState extends State<LandingPage>
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withOpacity(0.95), // FIXED: More opaque background
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Icon(
               isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? Colors.red : Colors.grey[600],
-              size: 20,
+              color: isFavorite ? Colors.red[600] : Colors.grey[600],
+              size: 18,
             ),
           ),
         );
@@ -530,7 +560,7 @@ class _LandingPageState extends State<LandingPage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
+                color: Colors.grey[700], // FIXED: Readable color
               ),
             ),
             const SizedBox(height: 8),
@@ -549,6 +579,10 @@ class _LandingPageState extends State<LandingPage>
               label: Text(
                 'Coba Lagi',
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal[600],
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -575,7 +609,7 @@ class _LandingPageState extends State<LandingPage>
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
+                color: Colors.grey[700], // FIXED: Readable color
               ),
             ),
             const SizedBox(height: 8),
@@ -597,6 +631,9 @@ class _LandingPageState extends State<LandingPage>
               label: Text(
                 'Reset Filter',
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.teal[600],
               ),
             ),
           ],

@@ -1,23 +1,24 @@
+// UPDATED: ProfilePage with Map Integration
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/UserService.dart';
 import '../services/RentService.dart';
 import '../services/NotificationService.dart';
+import '../services/LocationService.dart'; // FIXED: Add LocationService
 import '../models/user.dart';
 import '../components/bottomNav.dart';
 import 'LoginPage.dart';
 import 'SettingsPage.dart';
 import 'EditProfilePage.dart' as editProfile;
 import 'NotificationPage.dart';
-
 import 'RentPage.dart' as rentPage;
-
 import 'CurrencyConverterPage.dart' as currencyConverter;
-
-
 import 'TimeConverterPage.dart';
 import 'SuggestionPage.dart';
+import 'SensorPage.dart';
+import 'CampingMapPage.dart'; // FIXED: Add CampingMapPage
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -31,6 +32,8 @@ class _ProfilePageState extends State<ProfilePage>
   User? _currentUser;
   Map<String, dynamic> _userStats = {};
   bool _isLoading = true;
+  String? _currentLocation;
+  bool _locationLoading = false;
   
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -40,6 +43,7 @@ class _ProfilePageState extends State<ProfilePage>
     super.initState();
     _initializeAnimations();
     _loadUserData();
+    _getCurrentLocation();
   }
 
   void _initializeAnimations() {
@@ -100,6 +104,363 @@ class _ProfilePageState extends State<ProfilePage>
         );
       }
     }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      setState(() {
+        _locationLoading = true;
+      });
+
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _currentLocation = 'Lokasi tidak diizinkan';
+            _locationLoading = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _currentLocation = 'Izin lokasi ditolak permanen';
+          _locationLoading = false;
+        });
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _currentLocation = 'Magelang, Jawa Tengah (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+        _locationLoading = false;
+      });
+
+    } catch (e) {
+      setState(() {
+        _currentLocation = 'Gagal mendapatkan lokasi';
+        _locationLoading = false;
+      });
+    }
+  }
+
+  // FIXED: Navigate to camping map
+  void _navigateToCampingMap() async {
+    try {
+      // Check location permission first
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Izin lokasi diperlukan untuk menggunakan peta',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Silakan aktifkan izin lokasi di pengaturan untuk menggunakan peta',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to camping map
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CampingMapPage(),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: $e',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _findNearbyCampingSpots() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '🏕️ Spot Camping Terdekat',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _currentLocation ?? 'Memuat lokasi...',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  _buildCampingSpotCard(
+                    'Gunung Merbabu',
+                    '15 km dari lokasi Anda',
+                    'Basecamp New Selo',
+                    '⭐ 4.5 • 🌲 Hutan Pinus • 🏔️ 3.145 mdpl',
+                    Icons.terrain,
+                    Colors.green[600]!,
+                    -7.4550, 110.4403, // Sample coordinates
+                  ),
+                  _buildCampingSpotCard(
+                    'Umbul Ponggok',
+                    '12 km dari lokasi Anda',
+                    'Klaten, Jawa Tengah',
+                    '⭐ 4.3 • 🏊 Mata Air • 📸 Spot Foto',
+                    Icons.water,
+                    Colors.blue[600]!,
+                    -7.6517, 110.7222,
+                  ),
+                  _buildCampingSpotCard(
+                    'Kaliurang',
+                    '25 km dari lokasi Anda',
+                    'Sleman, DI Yogyakarta',
+                    '⭐ 4.4 • 🌋 Lereng Merapi • 🌡️ Sejuk',
+                    Icons.volcano,
+                    Colors.orange[600]!,
+                    -7.5954, 110.4189,
+                  ),
+                  _buildCampingSpotCard(
+                    'Ketep Pass',
+                    '8 km dari lokasi Anda',
+                    'Magelang, Jawa Tengah',
+                    '⭐ 4.6 • 🌅 Sunrise • 🔭 Observatory',
+                    Icons.landscape,
+                    Colors.purple[600]!,
+                    -7.4711, 110.3175,
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // FIXED: Button to open full map
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _navigateToCampingMap();
+                      },
+                      icon: const Icon(Icons.map),
+                      label: Text(
+                        'Buka Peta Lengkap & Navigasi',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal[600],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCampingSpotCard(String name, String distance, String location, String features, IconData icon, Color color, double lat, double lng) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        title: Text(
+          name,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+            color: Colors.grey[800],
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              distance,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.green[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Text(
+              location,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              features,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+        onTap: () {
+          // FIXED: Quick navigation option
+          _showQuickNavigationDialog(name, lat, lng);
+        },
+      ),
+    );
+  }
+
+  void _showQuickNavigationDialog(String name, double lat, double lng) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.navigation, color: Colors.teal[600]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Navigasi ke $name',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Pilih aplikasi untuk navigasi ke $name',
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+              _navigateToCampingMap();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal[600],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Buka Peta',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -168,13 +529,18 @@ class _ProfilePageState extends State<ProfilePage>
             const SizedBox(width: 8),
             Text(
               'Logout',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
             ),
           ],
         ),
         content: Text(
           'Apakah Anda yakin ingin keluar dari akun?',
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
         ),
         actions: [
           TextButton(
@@ -284,6 +650,7 @@ class _ProfilePageState extends State<ProfilePage>
           children: [
             _buildProfileHeader(),
             _buildStatsSection(),
+            _buildLocationSection(),
             _buildMenuSection(),
             const SizedBox(height: 100), // Bottom padding for navigation
           ],
@@ -457,11 +824,11 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildDefaultAvatar() {
     return Container(
-      color: Colors.grey[300],
+      color: Colors.grey[200],
       child: Icon(
         Icons.person,
         size: 50,
-        color: Colors.grey[600],
+        color: Colors.grey[500],
       ),
     );
   }
@@ -532,6 +899,7 @@ class _ProfilePageState extends State<ProfilePage>
               decoration: BoxDecoration(
                 color: Colors.teal[50],
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.teal[200]!, width: 1),
               ),
               child: Row(
                 children: [
@@ -555,6 +923,120 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.green[600], size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Lokasi Saat Ini',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const Spacer(),
+              if (_locationLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.green[600],
+                  ),
+                )
+              else
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Colors.green[600], size: 20),
+                  onPressed: _getCurrentLocation,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 8),
+          
+          Text(
+            _currentLocation ?? 'Memuat lokasi...',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _findNearbyCampingSpots,
+                  icon: const Icon(Icons.explore, size: 18),
+                  label: Text(
+                    'Spot Terdekat',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _navigateToCampingMap,
+                  icon: const Icon(Icons.map, size: 18),
+                  label: Text(
+                    'Buka Peta',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -624,6 +1106,19 @@ class _ProfilePageState extends State<ProfilePage>
           const SizedBox(height: 16),
           
           _buildMenuCard([
+            // FIXED: Add Map menu item
+            _buildMenuItem(
+              'Peta Camping',
+              'Temukan spot camping dan navigasi',
+              Icons.map,
+              () => _navigateToCampingMap(),
+            ),
+            _buildMenuItem(
+              'Sensor Monitor',
+              'Kompas, water level, dan sensor outdoor',
+              Icons.sensors,
+              () => _navigateToSensor(),
+            ),
             _buildMenuItem(
               'Konversi Mata Uang',
               'Konverter mata uang global',
@@ -636,17 +1131,17 @@ class _ProfilePageState extends State<ProfilePage>
               Icons.access_time,
               () => _navigateToTimeConverter(),
             ),
+          ]),
+          
+          const SizedBox(height: 16),
+          
+          _buildMenuCard([
             _buildMenuItem(
               'Pengaturan',
               'Kelola pengaturan aplikasi',
               Icons.settings,
               () => _navigateToSettings(),
             ),
-          ]),
-          
-          const SizedBox(height: 16),
-          
-          _buildMenuCard([
             _buildMenuItem(
               'Saran & Kesan',
               'Mata Kuliah Mobile Programming',
@@ -769,24 +1264,32 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
- void _navigateToRentHistory() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const rentPage.RentPage(), // ← hanya satu ()
-    ),
-  );
-}
+  void _navigateToRentHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const rentPage.RentPage(),
+      ),
+    );
+  }
 
-void _navigateToCurrencyConverter() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const currencyConverter.CurrencyConverterPage(),
-    ),
-  );
-}
+  void _navigateToSensor() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SensorPage(),
+      ),
+    );
+  }
 
+  void _navigateToCurrencyConverter() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const currencyConverter.CurrencyConverterPage(),
+      ),
+    );
+  }
 
   void _navigateToTimeConverter() {
     Navigator.push(
@@ -840,7 +1343,10 @@ void _navigateToCurrencyConverter() {
             const SizedBox(width: 8),
             Text(
               'SakuRimba',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
             ),
           ],
         ),
@@ -858,8 +1364,11 @@ void _navigateToCurrencyConverter() {
             ),
             const SizedBox(height: 12),
             Text(
-              'Aplikasi penyewaan peralatan camping yang memudahkan petualangan outdoor Anda.',
-              style: GoogleFonts.poppins(fontSize: 14),
+              'Aplikasi penyewaan peralatan camping yang memudahkan petualangan outdoor Anda dengan fitur sensor monitoring, lokasi, dan navigasi terintegrasi.',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey[700],
+              ),
             ),
             const SizedBox(height: 12),
             Text(

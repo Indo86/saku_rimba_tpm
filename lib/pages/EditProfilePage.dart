@@ -1,8 +1,10 @@
+// FIXED: Editable Message & Review - EditProfilePage.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-  import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/UserService.dart';
+import '../services/HiveService.dart'; // FIXED: Add HiveService for custom message storage
 import '../models/user.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -20,15 +22,59 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   
+  // FIXED: Add controllers for editable message and review
+  final _messageController = TextEditingController();
+  final _reviewController = TextEditingController();
+  final _learningPointsController = TextEditingController();
+  final _gratitudeController = TextEditingController();
+  
   File? _selectedImage;
   bool _isLoading = false;
   User? _currentUser;
   final ImagePicker _picker = ImagePicker();
 
+  // FIXED: Default content
+  String _defaultMessage = '';
+  String _defaultReview = '';
+  String _defaultLearningPoints = '';
+  String _defaultGratitude = '';
+
   @override
   void initState() {
     super.initState();
+    _initializeDefaultContent();
     _loadUserData();
+    _loadCustomMessages();
+  }
+
+  void _initializeDefaultContent() {
+    _defaultMessage = '''Mata kuliah Teknologi dan Pemrograman Mobile ini sangat menarik dan memberikan pemahaman mendalam tentang pengembangan aplikasi mobile modern. Melalui pembelajaran Flutter, saya dapat memahami konsep cross-platform development yang sangat efisien.
+
+Flutter framework memberikan pengalaman development yang luar biasa dengan hot reload feature yang memungkinkan perubahan code langsung terlihat hasilnya. Dart sebagai bahasa pemrograman juga mudah dipelajari dengan syntax yang clean dan modern.''';
+
+    _defaultReview = '''Pembelajaran mobile programming memberikan insight baru tentang:
+• User Experience (UX) design yang responsive
+• State management yang efektif
+• Integration dengan berbagai API dan services
+• Performance optimization untuk mobile apps
+• Cross-platform development best practices
+
+Setiap tugas dan project memberikan challenge yang berbeda, mulai dari UI design hingga complex business logic implementation.''';
+
+    _defaultLearningPoints = '''• Dart Programming Language & Advanced Features
+• Flutter Framework & Custom Widgets
+• State Management (Provider, Bloc, Riverpod)
+• API Integration & RESTful Web Services
+• Local Database (Hive/SQLite) & Data Persistence
+• Device Sensor Integration (GPS, Camera, etc.)
+• Location-Based Services & Maps Integration
+• Push Notifications & Background Processing
+• App Performance Optimization
+• Testing & Debugging Techniques''';
+
+    _defaultGratitude = '''Terima kasih kepada dosen pengampu yang telah membimbing dengan sabar dan memberikan ilmu yang sangat bermanfaat! 
+
+Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset problem-solving yang akan berguna dalam karir development ke depan. Semoga ilmu yang didapat dapat diterapkan untuk menciptakan aplikasi yang bermanfaat bagi masyarakat.''';
   }
 
   void _loadUserData() {
@@ -40,6 +86,128 @@ class _EditProfilePageState extends State<EditProfilePage> {
       _phoneController.text = _currentUser!.phone;
       _addressController.text = _currentUser!.alamat;
     }
+  }
+
+  // FIXED: Load custom messages from storage
+  Future<void> _loadCustomMessages() async {
+    try {
+      final userId = UserService.getCurrentUserId();
+      if (userId == null) return;
+
+      final customMessage = await HiveService.getSetting<String>('custom_message_$userId');
+      final customReview = await HiveService.getSetting<String>('custom_review_$userId');
+      final customLearningPoints = await HiveService.getSetting<String>('custom_learning_$userId');
+      final customGratitude = await HiveService.getSetting<String>('custom_gratitude_$userId');
+
+      setState(() {
+        _messageController.text = customMessage ?? _defaultMessage;
+        _reviewController.text = customReview ?? _defaultReview;
+        _learningPointsController.text = customLearningPoints ?? _defaultLearningPoints;
+        _gratitudeController.text = customGratitude ?? _defaultGratitude;
+      });
+    } catch (e) {
+      print('❌ Error loading custom messages: $e');
+      // Use default content if loading fails
+      setState(() {
+        _messageController.text = _defaultMessage;
+        _reviewController.text = _defaultReview;
+        _learningPointsController.text = _defaultLearningPoints;
+        _gratitudeController.text = _defaultGratitude;
+      });
+    }
+  }
+
+  // FIXED: Save custom messages to storage
+  Future<void> _saveCustomMessages() async {
+    try {
+      final userId = UserService.getCurrentUserId();
+      if (userId == null) return;
+
+      await HiveService.saveSetting('custom_message_$userId', _messageController.text.trim());
+      await HiveService.saveSetting('custom_review_$userId', _reviewController.text.trim());
+      await HiveService.saveSetting('custom_learning_$userId', _learningPointsController.text.trim());
+      await HiveService.saveSetting('custom_gratitude_$userId', _gratitudeController.text.trim());
+
+      print('✅ Custom messages saved successfully');
+    } catch (e) {
+      print('❌ Error saving custom messages: $e');
+      throw Exception('Gagal menyimpan pesan kustom');
+    }
+  }
+
+  // FIXED: Reset to default content
+  void _resetToDefault() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.refresh, color: Colors.orange[600]),
+            const SizedBox(width: 8),
+            Text(
+              'Reset ke Default',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin mengembalikan semua pesan dan kesan ke konten default?',
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _messageController.text = _defaultMessage;
+                _reviewController.text = _defaultReview;
+                _learningPointsController.text = _defaultLearningPoints;
+                _gratitudeController.text = _defaultGratitude;
+              });
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Konten telah direset ke default',
+                    style: GoogleFonts.poppins(),
+                  ),
+                  backgroundColor: Colors.orange[600],
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[600],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Reset',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickImage() async {
@@ -182,71 +350,73 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
     );
   }
-Future<void> _saveProfile() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() => _isLoading = true);
 
-  try {
-    String? imageUrl = _selectedImage?.path ?? _currentUser!.profileImage;
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
 
-    // Buat objek baru dengan copyWith dari currentUser,
-    // sehingga passwordHash, createdAt, dsb. tetap terjaga
-    final updatedUser = _currentUser!.copyWith(
-      nama:           _namaController.text.trim(),
-      username:       _usernameController.text.trim(),
-      email:          _emailController.text.trim(),
-      phone:          _phoneController.text.trim(),
-      alamat:         _addressController.text.trim(), // properti sesuai model
-      profileImage:   imageUrl,
-      // jangan set updatedAt/lastLogin di sini; UserService.updateUser akan update timestamp
-    );
+    try {
+      String? imageUrl = _selectedImage?.path ?? _currentUser!.profileImage;
 
-    // Panggil method yang benar
-    final success = await UserService.updateUser(updatedUser);
-
-    if (success) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 8),
-              Text('Profil berhasil diperbarui',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green[600],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      // Update user profile
+      final updatedUser = _currentUser!.copyWith(
+        nama: _namaController.text.trim(),
+        username: _usernameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        alamat: _addressController.text.trim(),
+        profileImage: imageUrl,
       );
-      Navigator.pop(context);
-    } else {
+
+      final userSuccess = await UserService.updateUser(updatedUser);
+      
+      // FIXED: Save custom messages
+      await _saveCustomMessages();
+
+      if (userSuccess) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  'Profil dan pesan berhasil diperbarui',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui profil', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal memperbarui profil', style: GoogleFonts.poppins()),
+          content: Text('Error: $e', style: GoogleFonts.poppins()),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Error: $e', style: GoogleFonts.poppins()),
-        backgroundColor: Colors.red,
-      ),
-    );
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
-
 
   @override
   void dispose() {
@@ -255,6 +425,10 @@ Future<void> _saveProfile() async {
     _emailController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _messageController.dispose();
+    _reviewController.dispose();
+    _learningPointsController.dispose();
+    _gratitudeController.dispose();
     super.dispose();
   }
 
@@ -303,8 +477,8 @@ Future<void> _saveProfile() async {
               
               const SizedBox(height: 32),
               
-              // Mobile Programming Message Section
-              _buildMobileProgrammingSection(),
+              // FIXED: Editable Mobile Programming Message Section
+              _buildEditableMobileProgrammingSection(),
               
               const SizedBox(height: 32),
               
@@ -584,7 +758,8 @@ Future<void> _saveProfile() async {
     );
   }
 
-  Widget _buildMobileProgrammingSection() {
+  // FIXED: Editable Mobile Programming Section
+  Widget _buildEditableMobileProgrammingSection() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -613,21 +788,29 @@ Future<void> _saveProfile() async {
                 size: 24,
               ),
               const SizedBox(width: 8),
-              Text(
-                'Mata Kuliah Mobile Programming',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.teal[700],
+              Expanded(
+                child: Text(
+                  'Mata Kuliah Mobile Programming',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal[700],
+                  ),
                 ),
+              ),
+              IconButton(
+                onPressed: _resetToDefault,
+                icon: Icon(Icons.refresh, color: Colors.orange[600]),
+                tooltip: 'Reset ke Default',
               ),
             ],
           ),
           
           const SizedBox(height: 16),
           
+          // FIXED: Editable Message Section
           Text(
-            '📱 Pesan & Kesan',
+            '📱 Pesan & Kesan (Editable)',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -637,19 +820,38 @@ Future<void> _saveProfile() async {
           
           const SizedBox(height: 8),
           
-          Text(
-            'Mata kuliah Teknologi dan Pemrograman Mobile ini sangat menarik dan memberikan pemahaman mendalam tentang pengembangan aplikasi mobile modern. Melalui pembelajaran Flutter, saya dapat memahami konsep cross-platform development yang sangat efisien.',
+          TextFormField(
+            controller: _messageController,
+            maxLines: 6,
             style: GoogleFonts.poppins(
               fontSize: 13,
               color: Colors.grey[700],
               height: 1.5,
             ),
+            decoration: InputDecoration(
+              hintText: 'Tulis pesan dan kesan Anda tentang mata kuliah Mobile Programming...',
+              hintStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[200]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
+              ),
+              fillColor: Colors.white,
+              filled: true,
+            ),
           ),
           
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           
+          // FIXED: Editable Review Section
           Text(
-            '🎯 Yang Dipelajari:',
+            '🎯 Review Pembelajaran (Editable)',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -659,38 +861,134 @@ Future<void> _saveProfile() async {
           
           const SizedBox(height: 8),
           
-          _buildLearningPoint('• Dart Programming Language'),
-          _buildLearningPoint('• Flutter Framework & Widgets'),
-          _buildLearningPoint('• State Management'),
-          _buildLearningPoint('• API Integration & Web Services'),
-          _buildLearningPoint('• Local Database (Hive/SQLite)'),
-          _buildLearningPoint('• Sensor Integration'),
-          _buildLearningPoint('• Location-Based Services'),
-          _buildLearningPoint('• Push Notifications'),
+          TextFormField(
+            controller: _reviewController,
+            maxLines: 5,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.grey[700],
+              height: 1.5,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Review detail tentang pembelajaran yang telah dilalui...',
+              hintStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[200]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
+              ),
+              fillColor: Colors.white,
+              filled: true,
+            ),
+          ),
           
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           
+          // FIXED: Editable Learning Points
+          Text(
+            '📚 Yang Dipelajari (Editable)',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          TextFormField(
+            controller: _learningPointsController,
+            maxLines: 8,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+            decoration: InputDecoration(
+              hintText: 'Daftar materi yang dipelajari (gunakan • untuk bullet points)...',
+              hintStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[200]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
+              ),
+              fillColor: Colors.white,
+              filled: true,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // FIXED: Editable Gratitude Section
+          Text(
+            '💝 Ucapan Terima Kasih (Editable)',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          TextFormField(
+            controller: _gratitudeController,
+            maxLines: 4,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: Colors.teal[700],
+            ),
+            decoration: InputDecoration(
+              hintText: 'Ucapan terima kasih kepada dosen dan yang terlibat...',
+              hintStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[200]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
+              ),
+              fillColor: Colors.teal[25],
+              filled: true,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Helper Text
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.teal[100],
+              color: Colors.blue[50],
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.favorite,
-                  color: Colors.red[600],
-                  size: 20,
-                ),
+                Icon(Icons.info, color: Colors.blue[600], size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Terima kasih kepada dosen pengampu yang telah membimbing dengan sabar dan memberikan ilmu yang sangat bermanfaat!',
+                    'Tip: Anda dapat mengedit semua bagian sesuai pengalaman pribadi. Gunakan tombol refresh untuk kembali ke konten default.',
                     style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.teal[700],
+                      fontSize: 11,
+                      color: Colors.blue[700],
                     ),
                   ),
                 ),
@@ -698,19 +996,6 @@ Future<void> _saveProfile() async {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLearningPoint(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          color: Colors.grey[700],
-        ),
       ),
     );
   }

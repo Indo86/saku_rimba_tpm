@@ -140,18 +140,13 @@ class _SensorPageState extends State<SensorPage>
     return directions[index];
   }
 
-
-double _calculateAltitude(double pressure) {
-  // Barometric formula for altitude calculation
-  const double seaLevelPressure = 1013.25;
-
-  // math.pow mengembalikan num, jadi kita ubah .toDouble()
-  final double ratio = pressure / seaLevelPressure;
-  final double exponent = math.pow(ratio, 0.1903).toDouble();
-
-  return 44330.0 * (1 - exponent);
-}
-
+  double _calculateAltitude(double pressure) {
+    // Barometric formula for altitude calculation
+    const double seaLevelPressure = 1013.25;
+    final double ratio = pressure / seaLevelPressure;
+    final double exponent = math.pow(ratio, 0.1903).toDouble();
+    return 44330.0 * (1 - exponent);
+  }
 
   void _toggleRecording() {
     setState(() {
@@ -244,7 +239,7 @@ double _calculateAltitude(double pressure) {
         IconButton(
           icon: Icon(
             _isRecording ? Icons.stop : Icons.fiber_manual_record,
-            color: _isRecording ? Colors.red : Colors.white,
+            color: _isRecording ? Colors.red[300] : Colors.white,
           ),
           onPressed: _toggleRecording,
           tooltip: _isRecording ? 'Stop Recording' : 'Start Recording',
@@ -411,7 +406,7 @@ double _calculateAltitude(double pressure) {
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: Colors.grey[800], // FIXED: Dark readable text
             ),
           ),
           
@@ -593,7 +588,7 @@ double _calculateAltitude(double pressure) {
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: Colors.grey[800], // FIXED: Dark readable text
             ),
           ),
           
@@ -671,7 +666,7 @@ double _calculateAltitude(double pressure) {
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+                      color: Colors.grey[800], // FIXED: Dark readable text
                     ),
                   ),
                 ],
@@ -690,7 +685,7 @@ double _calculateAltitude(double pressure) {
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+                      color: Colors.grey[800], // FIXED: Dark readable text
                     ),
                   ),
                 ],
@@ -774,7 +769,7 @@ double _calculateAltitude(double pressure) {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  color: Colors.grey[800], // FIXED: Dark readable text
                 ),
               ),
             ],
@@ -837,7 +832,7 @@ double _calculateAltitude(double pressure) {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  color: Colors.grey[800], // FIXED: Dark readable text
                 ),
               ),
             ],

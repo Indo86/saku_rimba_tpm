@@ -1,3 +1,4 @@
+// FIXED: Auto-refresh after payment - RentPage.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/RentService.dart';
@@ -6,6 +7,7 @@ import '../models/rent.dart';
 import '../components/bottomNav.dart';
 import 'RentDetailPage.dart';
 import 'LoginPage.dart';
+import 'PaymentPage.dart';
 
 class RentPage extends StatefulWidget {
   const RentPage({super.key});
@@ -51,6 +53,11 @@ class _RentPageState extends State<RentPage>
     _tabController = TabController(length: 4, vsync: this);
     _initializeAnimations();
     _loadRentals();
+    
+    // FIXED: Listen to app lifecycle changes for auto-refresh
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupAutoRefresh();
+    });
   }
 
   void _initializeAnimations() {
@@ -70,6 +77,16 @@ class _RentPageState extends State<RentPage>
     _fadeController.forward();
   }
 
+  // FIXED: Setup auto-refresh functionality
+  void _setupAutoRefresh() {
+    // Auto refresh when page becomes visible again
+    WidgetsBinding.instance.addObserver(_AppLifecycleObserver(onResume: () {
+      if (mounted) {
+        _loadRentals();
+      }
+    }));
+  }
+
   Future<void> _loadRentals() async {
     try {
       if (!UserService.isUserLoggedIn()) {
@@ -85,14 +102,25 @@ class _RentPageState extends State<RentPage>
         _errorMessage = '';
       });
 
+      print('🔄 Loading rentals from RentService...');
       final rentals = await RentService.getUserRentals();
+      print('✅ Loaded ${rentals.length} rentals');
+      
+      // FIXED: Log rental details for debugging
+      for (var rental in rentals) {
+        print('  📋 ${rental.id}: ${rental.peralatanNama} - Status: ${rental.status} - Payment: ${rental.paymentStatus}');
+      }
       
       setState(() {
         _allRentals = rentals;
         _filteredRentals = rentals;
         _isLoading = false;
       });
+      
+      // Apply current filter
+      _filterRentals();
     } catch (e) {
+      print('❌ Error loading rentals: $e');
       setState(() {
         _isLoading = false;
         _errorMessage = 'Gagal memuat data sewa: $e';
@@ -110,6 +138,8 @@ class _RentPageState extends State<RentPage>
             .toList();
       }
     });
+    
+    print('🔍 Filtered ${_filteredRentals.length} rentals for status: $_selectedStatus');
   }
 
   void _onStatusChanged(String status) {
@@ -180,13 +210,18 @@ class _RentPageState extends State<RentPage>
             const SizedBox(width: 8),
             Text(
               'Batalkan Sewa',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
             ),
           ],
         ),
         content: Text(
           'Apakah Anda yakin ingin membatalkan sewa "${rental.peralatanNama}"?',
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
         ),
         actions: [
           TextButton(
@@ -219,6 +254,52 @@ class _RentPageState extends State<RentPage>
         ],
       ),
     );
+  }
+
+  // FIXED: Navigate to payment with result handling
+  void _navigateToPayment(Rent rental) async {
+    print('💳 Navigating to payment for rental: ${rental.id}');
+    
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PaymentPage(rental: rental),
+      ),
+    );
+    
+    // FIXED: Check if payment was successful and refresh data
+    if (result == true) {
+      print('✅ Payment completed successfully, refreshing rental data...');
+      await _loadRentals();
+      
+      // Show success feedback
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  'Pembayaran berhasil! Status sewa telah diperbarui.',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      print('ℹ️ Payment page closed without completion, refreshing anyway...');
+      // Refresh anyway in case there were changes
+      await _loadRentals();
+    }
   }
 
   void _showRentDetail(Rent rental) {
@@ -367,7 +448,10 @@ class _RentPageState extends State<RentPage>
         if (_allRentals.isNotEmpty)
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadRentals,
+            onPressed: () {
+              print('🔄 Manual refresh triggered');
+              _loadRentals();
+            },
             tooltip: 'Refresh',
           ),
       ],
@@ -476,15 +560,20 @@ class _RentPageState extends State<RentPage>
                 style: GoogleFonts.poppins(
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected ? Colors.white : Colors.teal[700],
+                  fontSize: 13,
                 ),
               ),
               selected: isSelected,
               onSelected: (_) => _onStatusChanged(status),
-              backgroundColor: Colors.grey[200],
+              backgroundColor: Colors.white,
               selectedColor: Colors.teal[600],
               checkmarkColor: Colors.white,
               elevation: isSelected ? 4 : 1,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(
+                color: isSelected ? Colors.teal[600]! : Colors.grey[300]!,
+                width: 1,
+              ),
             ),
           );
         },
@@ -556,6 +645,10 @@ class _RentPageState extends State<RentPage>
               label: Text(
                 'Coba Lagi',
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal[600],
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -640,6 +733,7 @@ class _RentPageState extends State<RentPage>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      color: Colors.white,
       child: InkWell(
         onTap: () => _showRentDetail(rental),
         borderRadius: BorderRadius.circular(16),
@@ -735,6 +829,7 @@ class _RentPageState extends State<RentPage>
                 decoration: BoxDecoration(
                   color: Colors.grey[50],
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!, width: 1),
                 ),
                 child: Column(
                   children: [
@@ -822,9 +917,7 @@ class _RentPageState extends State<RentPage>
                       if (rental.status == 'pending') const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            // Navigate to payment
-                          },
+                          onPressed: () => _navigateToPayment(rental),
                           icon: const Icon(Icons.payment),
                           label: Text(
                             rental.paymentStatus == 'unpaid' ? 'Bayar' : 'Bayar Sisa',
@@ -886,6 +979,7 @@ class _RentPageState extends State<RentPage>
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!, width: 1),
       ),
       child: Column(
         children: [
@@ -963,7 +1057,10 @@ class _RentPageState extends State<RentPage>
             children: [
               Text(
                 'Total Harga:',
-                style: GoogleFonts.poppins(fontSize: 14),
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                ),
               ),
               Text(
                 'Rp ${rental.totalPrice.toStringAsFixed(0)}',
@@ -981,11 +1078,17 @@ class _RentPageState extends State<RentPage>
               children: [
                 Text(
                   'Dibayar:',
-                  style: GoogleFonts.poppins(fontSize: 14),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
                 ),
                 Text(
                   'Rp ${rental.paidAmount.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(fontSize: 14),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
                 ),
               ],
             ),
@@ -996,7 +1099,10 @@ class _RentPageState extends State<RentPage>
             children: [
               Text(
                 'Status:',
-                style: GoogleFonts.poppins(fontSize: 14),
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                ),
               ),
               _buildPaymentStatusChip(rental.paymentStatus),
             ],
@@ -1033,7 +1139,7 @@ class _RentPageState extends State<RentPage>
             child: ElevatedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
-                // Navigate to payment
+                _navigateToPayment(rental);
               },
               icon: const Icon(Icons.payment),
               label: Text(
@@ -1144,5 +1250,19 @@ class _RentPageState extends State<RentPage>
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+// FIXED: Add lifecycle observer for auto-refresh
+class _AppLifecycleObserver with WidgetsBindingObserver {
+  final VoidCallback onResume;
+  
+  _AppLifecycleObserver({required this.onResume});
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onResume();
+    }
   }
 }

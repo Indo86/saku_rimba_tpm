@@ -112,7 +112,7 @@ class SakuRimbaApp extends StatelessWidget {
           borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
         ),
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: Colors.grey[100],
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
       colorScheme: ColorScheme.fromSeed(

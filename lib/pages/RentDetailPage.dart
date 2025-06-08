@@ -1,3 +1,4 @@
+// FIXED: Calendar input bug - RentDetailPage.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/Peralatan.dart';
@@ -22,9 +23,9 @@ class _RentDetailPageState extends State<RentDetailPage>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
   
   int _quantity = 1;
-  int _rentalDays = 1;
   DateTime _startDate = DateTime.now().add(const Duration(days: 1));
   DateTime _endDate = DateTime.now().add(const Duration(days: 2));
   bool _isFavorite = false;
@@ -76,10 +77,8 @@ class _RentDetailPageState extends State<RentDetailPage>
     }
   }
 
-  void _updateEndDate() {
-    setState(() {
-      _endDate = _startDate.add(Duration(days: _rentalDays));
-    });
+  int get _rentalDays {
+    return _endDate.difference(_startDate).inDays;
   }
 
   double get _totalPrice {
@@ -88,6 +87,15 @@ class _RentDetailPageState extends State<RentDetailPage>
 
   double get _minimumDP {
     return _totalPrice * 0.5;
+  }
+
+  void _updateQuantity(String value) {
+    final quantity = int.tryParse(value) ?? 0;
+    if (quantity > 0 && quantity <= widget.peralatan.stok) {
+      setState(() {
+        _quantity = quantity;
+      });
+    }
   }
 
   Future<void> _toggleFavorite() async {
@@ -118,7 +126,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                 ),
               ],
             ),
-            backgroundColor: _isFavorite ? Colors.red : Colors.orange[600],
+            backgroundColor: _isFavorite ? Colors.red[600] : Colors.orange[600],
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -149,11 +157,37 @@ class _RentDetailPageState extends State<RentDetailPage>
 
     if (!_formKey.currentState!.validate()) return;
 
+    if (_quantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Jumlah peralatan harus lebih dari 0',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (widget.peralatan.stok < _quantity) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Stok tidak mencukupi. Stok tersedia: ${widget.peralatan.stok}',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_rentalDays <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tanggal selesai harus setelah tanggal mulai',
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: Colors.red,
@@ -180,7 +214,6 @@ class _RentDetailPageState extends State<RentDetailPage>
 
       if (rentalId != null) {
         if (mounted) {
-          // Show success dialog
           _showSuccessDialog(rentalId);
         }
       } else {
@@ -404,7 +437,7 @@ class _RentDetailPageState extends State<RentDetailPage>
       builder: (context) => SlideTransition(
         position: _slideAnimation,
         child: Container(
-          height: MediaQuery.of(context).size.height * 0.8,
+          height: MediaQuery.of(context).size.height * 0.85,
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.only(
@@ -457,132 +490,124 @@ class _RentDetailPageState extends State<RentDetailPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Quantity Selection
+                        // Quantity Input
                         _buildSectionTitle('Jumlah Peralatan'),
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _quantity > 1 
-                                  ? () => setState(() => _quantity--) 
-                                  : null,
-                              icon: const Icon(Icons.remove_circle_outline),
+                        TextFormField(
+                          controller: _quantityController,
+                          keyboardType: TextInputType.number,
+                          style: GoogleFonts.poppins(
+                            color: Colors.black87,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Masukkan jumlah peralatan',
+                            hintStyle: GoogleFonts.poppins(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.add_shopping_cart,
                               color: Colors.teal[600],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                _quantity.toString(),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            suffixText: 'unit',
+                            suffixStyle: GoogleFonts.poppins(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.teal[600]!,
+                                width: 2,
                               ),
                             ),
-                            IconButton(
-                              onPressed: _quantity < widget.peralatan.stok 
-                                  ? () => setState(() => _quantity++) 
-                                  : null,
-                              icon: const Icon(Icons.add_circle_outline),
-                              color: Colors.teal[600],
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
                             ),
-                            const Spacer(),
-                            Text(
-                              'Stok: ${widget.peralatan.stok}',
-                              style: GoogleFonts.poppins(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                            fillColor: Colors.grey[50],
+                            filled: true,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Jumlah peralatan diperlukan';
+                            }
+                            final quantity = int.tryParse(value.trim());
+                            if (quantity == null) {
+                              return 'Masukkan angka yang valid';
+                            }
+                            if (quantity <= 0) {
+                              return 'Jumlah harus lebih dari 0';
+                            }
+                            if (quantity > widget.peralatan.stok) {
+                              return 'Melebihi stok tersedia (${widget.peralatan.stok})';
+                            }
+                            return null;
+                          },
+                          onChanged: (value) {
+                            _updateQuantity(value);
+                          },
                         ),
                         
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 8),
                         
-                        // Duration Selection
-                        _buildSectionTitle('Durasi Sewa'),
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _rentalDays > 1 
-                                  ? () {
-                                      setState(() {
-                                        _rentalDays--;
-                                        _updateEndDate();
-                                      });
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.remove_circle_outline),
-                              color: Colors.teal[600],
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '$_rentalDays hari',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: _rentalDays < 30 
-                                  ? () {
-                                      setState(() {
-                                        _rentalDays++;
-                                        _updateEndDate();
-                                      });
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.add_circle_outline),
-                              color: Colors.teal[600],
-                            ),
-                          ],
+                        Text(
+                          'Stok tersedia: ${widget.peralatan.stok} unit',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
                         ),
                         
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
                         
-                        // Date Selection
-                        _buildSectionTitle('Tanggal Sewa'),
+                        // FIXED: Date Selection with proper state management
+                        _buildSectionTitle('Periode Sewa'),
                         Row(
                           children: [
                             Expanded(
                               child: InkWell(
                                 onTap: () => _selectStartDate(),
                                 child: Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
                                     border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey[50],
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        'Mulai',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            color: Colors.teal[600],
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Tanggal Mulai',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                      const SizedBox(height: 8),
                                       Text(
                                         _formatDate(_startDate),
                                         style: GoogleFonts.poppins(
                                           fontWeight: FontWeight.w600,
                                           color: Colors.grey[800],
+                                          fontSize: 14,
                                         ),
                                       ),
                                     ],
@@ -594,62 +619,117 @@ class _RentDetailPageState extends State<RentDetailPage>
                             Icon(Icons.arrow_forward, color: Colors.grey[400]),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Selesai',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                              child: InkWell(
+                                onTap: () => _selectEndDate(),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey[50],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.event,
+                                            color: Colors.teal[600],
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Tanggal Selesai',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    Text(
-                                      _formatDate(_endDate),
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey[800],
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _formatDate(_endDate),
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[800],
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
                         
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 12),
+                        
+                        // Show calculated duration
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time, color: Colors.blue[600], size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Durasi sewa: $_rentalDays hari',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
                         
                         // Phone Number
                         _buildSectionTitle('Nomor Telepon'),
                         TextFormField(
                           controller: _phoneController,
                           keyboardType: TextInputType.phone,
-                          style: GoogleFonts.poppins(),
+                          style: GoogleFonts.poppins(
+                            color: Colors.black87,
+                            fontSize: 16,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Masukkan nomor telepon',
-                            hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                            hintStyle: GoogleFonts.poppins(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                            ),
                             prefixIcon: Icon(
                               Icons.phone,
                               color: Colors.teal[600],
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
                                 color: Colors.teal[600]!,
                                 width: 2,
                               ),
                             ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
+                            ),
+                            fillColor: Colors.grey[50],
+                            filled: true,
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -662,14 +742,14 @@ class _RentDetailPageState extends State<RentDetailPage>
                           },
                         ),
                         
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
                         
                         // Price Summary
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.teal[50],
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.teal[200]!),
                           ),
                           child: Column(
@@ -686,7 +766,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                                 'Durasi',
                                 '$_rentalDays hari',
                               ),
-                              const Divider(),
+                              const Divider(color: Colors.teal),
                               _buildPriceRow(
                                 'Total Harga',
                                 'Rp ${_totalPrice.toStringAsFixed(0)}',
@@ -743,25 +823,99 @@ class _RentDetailPageState extends State<RentDetailPage>
     );
   }
 
+  // FIXED: Date picker functions with proper state management
   Future<void> _selectStartDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _startDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.teal[600]!,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     
     if (picked != null && picked != _startDate) {
       setState(() {
         _startDate = picked;
-        _updateEndDate();
+        // FIXED: Ensure end date is at least one day after start date
+        if (_endDate.isBefore(picked.add(const Duration(days: 1))) || 
+            _endDate.isAtSameMomentAs(picked)) {
+          _endDate = picked.add(const Duration(days: 1));
+        }
       });
+      
+      // FIXED: Show feedback to user about date change
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Tanggal mulai diubah ke ${_formatDate(picked)}',
+              style: GoogleFonts.poppins(),
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.teal[600],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      firstDate: _startDate.add(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.teal[600]!,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (picked != null && picked != _endDate) {
+      setState(() {
+        _endDate = picked;
+      });
+      
+      // FIXED: Show feedback to user about date change
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Tanggal selesai diubah ke ${_formatDate(picked)}',
+              style: GoogleFonts.poppins(),
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.teal[600],
+          ),
+        );
+      }
     }
   }
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
         style: GoogleFonts.poppins(
@@ -775,7 +929,7 @@ class _RentDetailPageState extends State<RentDetailPage>
 
   Widget _buildPriceRow(String label, String value, {bool isTotal = false, bool isSubtext = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -813,6 +967,7 @@ class _RentDetailPageState extends State<RentDetailPage>
   void dispose() {
     _slideController.dispose();
     _phoneController.dispose();
+    _quantityController.dispose();
     super.dispose();
   }
 
@@ -822,7 +977,7 @@ class _RentDetailPageState extends State<RentDetailPage>
       backgroundColor: Colors.grey[50],
       body: CustomScrollView(
         slivers: [
-          // App Bar with Image - FIXED: Brighter design
+          // App Bar with Image
           SliverAppBar(
             expandedHeight: 300,
             floating: false,
@@ -839,14 +994,14 @@ class _RentDetailPageState extends State<RentDetailPage>
                           onError: (exception, stackTrace) {},
                         )
                       : null,
-                  color: Colors.grey[200], // Lighter background
+                  color: Colors.grey[200],
                 ),
                 child: widget.peralatan.image.isEmpty
                     ? Center(
                         child: Icon(
                           Icons.image_not_supported,
                           size: 64,
-                          color: Colors.grey[400], // Lighter icon
+                          color: Colors.grey[400],
                         ),
                       )
                     : Container(
@@ -856,7 +1011,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.2), // Less dark overlay
+                              Colors.black.withOpacity(0.3),
                             ],
                           ),
                         ),
@@ -868,20 +1023,20 @@ class _RentDetailPageState extends State<RentDetailPage>
                 onPressed: _toggleFavorite,
                 icon: Icon(
                   _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.red : Colors.white,
+                  color: _isFavorite ? Colors.red[400] : Colors.white,
                 ),
               ),
             ],
           ),
           
-          // Content - FIXED: Brighter colors
+          // Content
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Basic Info
                 Container(
-                  color: Colors.white, // White background instead of dark
+                  color: Colors.white,
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -891,7 +1046,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                         style: GoogleFonts.poppins(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800], // Dark text on light background
+                          color: Colors.grey[800],
                         ),
                       ),
                       
@@ -905,7 +1060,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.teal[100], // Light teal background
+                              color: Colors.teal[100],
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -913,7 +1068,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.teal[700], // Dark teal text
+                                color: Colors.teal[700],
                               ),
                             ),
                           ),
@@ -925,8 +1080,8 @@ class _RentDetailPageState extends State<RentDetailPage>
                             ),
                             decoration: BoxDecoration(
                               color: widget.peralatan.stok > 0 
-                                  ? Colors.green[100] // Light green
-                                  : Colors.red[100], // Light red
+                                  ? Colors.green[100] 
+                                  : Colors.red[100],
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -935,8 +1090,8 @@ class _RentDetailPageState extends State<RentDetailPage>
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: widget.peralatan.stok > 0 
-                                    ? Colors.green[700] // Dark green text
-                                    : Colors.red[700], // Dark red text
+                                    ? Colors.green[700] 
+                                    : Colors.red[700],
                               ),
                             ),
                           ),
@@ -950,7 +1105,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.teal[700], // Bright teal price
+                          color: Colors.teal[700],
                         ),
                       ),
                     ],
@@ -959,16 +1114,16 @@ class _RentDetailPageState extends State<RentDetailPage>
                 
                 const SizedBox(height: 16),
                 
-                // Details Section - FIXED: Bright white card
+                // Details Section
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white, // Bright white background
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05), // Subtle shadow
+                        color: Colors.black.withOpacity(0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -982,7 +1137,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800], // Dark text
+                          color: Colors.grey[800],
                         ),
                       ),
                       
@@ -1011,7 +1166,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                             : 'Tidak ada deskripsi tersedia.',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          color: Colors.grey[600], // Readable gray text
+                          color: Colors.grey[600],
                           height: 1.5,
                         ),
                       ),
@@ -1081,7 +1236,7 @@ class _RentDetailPageState extends State<RentDetailPage>
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey[800], // Dark readable text
+                color: Colors.grey[800],
               ),
             ),
           ),
