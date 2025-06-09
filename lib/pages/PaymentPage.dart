@@ -1,8 +1,7 @@
-// FIXED: Payment status integration - PaymentPage.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/rent.dart';
-import '../services/PaymentService.dart'; // FIXED: Use actual PaymentService
+import '../services/PaymentService.dart';
 import '../services/UserService.dart';
 
 class PaymentPage extends StatefulWidget {
@@ -20,7 +19,7 @@ class PaymentPage extends StatefulWidget {
 class _PaymentPageState extends State<PaymentPage>
     with TickerProviderStateMixin {
   String _selectedPaymentMethod = 'bank_transfer';
-  String _paymentType = 'full'; // full or dp
+  String _paymentType = 'full'; // full, dp, or remaining
   bool _isProcessing = false;
   
   late AnimationController _fadeController;
@@ -61,9 +60,11 @@ class _PaymentPageState extends State<PaymentPage>
   void initState() {
     super.initState();
     _initializeAnimations();
-    // Set default payment type based on rental status
+    // FIXED: Set default payment type based on rental payment status
     if (widget.rental.paymentStatus == 'dp') {
       _paymentType = 'remaining'; // Pay remaining amount
+    } else if (widget.rental.paymentStatus == 'unpaid') {
+      _paymentType = 'dp'; // Default to DP for unpaid
     }
   }
 
@@ -108,7 +109,12 @@ class _PaymentPageState extends State<PaymentPage>
     }
   }
 
-  // FIXED: Use actual PaymentService
+  // FIXED: Get expected rental status after payment
+  String get _expectedRentalStatusAfterPayment {
+    return PaymentService.getRentalStatusAfterPayment(_paymentType, widget.rental.status);
+  }
+
+  // FIXED: Use actual PaymentService with proper payment type
   Future<void> _processPayment() async {
     setState(() {
       _isProcessing = true;
@@ -119,8 +125,9 @@ class _PaymentPageState extends State<PaymentPage>
       print('💰 Amount: $_paymentAmount');
       print('💳 Method: $_selectedPaymentMethod');
       print('📝 Type: $_paymentType');
+      print('🎯 Expected rental status after payment: $_expectedRentalStatusAfterPayment');
 
-      // FIXED: Call actual PaymentService
+      // FIXED: Call PaymentService with proper payment type
       final success = await PaymentService.processPayment(
         rentalId: widget.rental.id,
         amount: _paymentAmount,
@@ -173,106 +180,121 @@ class _PaymentPageState extends State<PaymentPage>
           children: [
             Icon(Icons.check_circle, color: Colors.green[600]),
             const SizedBox(width: 8),
-            Text(
-              'Pembayaran Berhasil!',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+            Flexible(
+              child: Text(
+                'Pembayaran Berhasil!',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
               ),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pembayaran Anda telah berhasil diproses.',
-              style: GoogleFonts.poppins(
-                color: Colors.grey[700],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pembayaran Anda telah berhasil diproses.',
+                style: GoogleFonts.poppins(
+                  color: Colors.grey[700],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green[200]!),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💳 Detail Pembayaran:',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Jumlah: Rp ${_formatCurrency(_paymentAmount)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    Text(
+                      'Metode: ${_getPaymentMethodName(_selectedPaymentMethod)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    Text(
+                      'Tipe: ${PaymentService.getPaymentTypeName(_paymentType)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    Text(
+                      'Waktu: ${DateTime.now().toString().substring(0, 19)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '💳 Detail Pembayaran:',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.green[700],
+              const SizedBox(height: 12),
+              // FIXED: Show rental status update information
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info, color: Colors.blue[600], size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Status Sewa Diperbarui',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Jumlah: Rp ${_paymentAmount.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.green[700],
-                    ),
-                  ),
-                  Text(
-                    'Metode: ${_getPaymentMethodName(_selectedPaymentMethod)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.green[700],
-                    ),
-                  ),
-                  Text(
-                    'Tipe: ${_getPaymentTypeName(_paymentType)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.green[700],
-                    ),
-                  ),
-                  Text(
-                    'Waktu: ${DateTime.now().toString().substring(0, 19)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.green[700],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info, color: Colors.blue[600], size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Status sewa Anda akan diperbarui secara otomatis. Silakan cek halaman "Sewa" untuk melihat perubahan status.',
+                    const SizedBox(height: 4),
+                    Text(
+                      _getStatusUpdateMessage(),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.blue[700],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context); // Close dialog
-              // FIXED: Return with success indicator to trigger refresh
               Navigator.pop(context, true); // Back to previous page with success
             },
             style: ElevatedButton.styleFrom(
@@ -292,6 +314,24 @@ class _PaymentPageState extends State<PaymentPage>
     );
   }
 
+  // FIXED: Get status update message based on payment type
+  String _getStatusUpdateMessage() {
+    switch (_paymentType) {
+      case 'dp':
+        return 'Status sewa berubah menjadi "Dikonfirmasi" karena DP telah dibayar.';
+      case 'full':
+        if (widget.rental.paymentStatus == 'unpaid') {
+          return 'Status sewa berubah menjadi "Aktif" karena pembayaran lunas.';
+        } else {
+          return 'Status sewa berubah menjadi "Aktif" karena pelunasan.';
+        }
+      case 'remaining':
+        return 'Status sewa berubah menjadi "Aktif" karena pelunasan sisa pembayaran.';
+      default:
+        return 'Status sewa telah diperbarui sesuai pembayaran.';
+    }
+  }
+
   void _showPaymentFailedDialog() {
     showDialog(
       context: context,
@@ -303,11 +343,13 @@ class _PaymentPageState extends State<PaymentPage>
           children: [
             Icon(Icons.error, color: Colors.red[600]),
             const SizedBox(width: 8),
-            Text(
-              'Pembayaran Gagal',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+            Flexible(
+              child: Text(
+                'Pembayaran Gagal',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
               ),
             ),
           ],
@@ -369,18 +411,11 @@ class _PaymentPageState extends State<PaymentPage>
     return method['name'];
   }
 
-  // FIXED: Add payment type name helper
-  String _getPaymentTypeName(String type) {
-    switch (type) {
-      case 'full':
-        return 'Pembayaran Penuh';
-      case 'dp':
-        return 'Down Payment (DP)';
-      case 'remaining':
-        return 'Pelunasan';
-      default:
-        return type;
-    }
+  String _formatCurrency(double amount) {
+    return amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
   }
 
   @override
@@ -479,78 +514,16 @@ class _PaymentPageState extends State<PaymentPage>
               fontWeight: FontWeight.w600,
               color: Colors.grey[800],
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           
           const SizedBox(height: 8),
           
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'ID Sewa:',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text(
-                widget.rental.id,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
+          _buildDetailRow('ID Sewa:', widget.rental.id),
+          _buildDetailRow('Durasi:', '${widget.rental.rentalDays} hari'),
+          _buildDetailRow('Jumlah:', '${widget.rental.quantity} unit'),
           
-          const SizedBox(height: 4),
-          
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Durasi:',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text(
-                '${widget.rental.rentalDays} hari',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 4),
-          
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Jumlah:',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text(
-                '${widget.rental.quantity} unit',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          
-          // FIXED: Show current payment status
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(8),
@@ -584,7 +557,35 @@ class _PaymentPageState extends State<PaymentPage>
     );
   }
 
-  // FIXED: Add payment status helpers
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[800],
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getPaymentStatusColor(String status) {
     switch (status) {
       case 'paid':
@@ -642,84 +643,75 @@ class _PaymentPageState extends State<PaymentPage>
           
           Column(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: _paymentType == 'full' ? Colors.teal[600]! : Colors.grey[300]!,
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  color: _paymentType == 'full' ? Colors.teal[50] : Colors.white,
-                ),
-                child: RadioListTile<String>(
-                  title: Text(
-                    'Bayar Penuh',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Rp ${_totalAmount.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.green[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  value: 'full',
-                  groupValue: _paymentType,
-                  onChanged: (value) {
-                    setState(() {
-                      _paymentType = value!;
-                    });
-                  },
-                  activeColor: Colors.teal[600],
-                ),
+              _buildPaymentTypeOption(
+                'full',
+                'Bayar Penuh',
+                'Rp ${_formatCurrency(_totalAmount)}',
+                'Status sewa langsung menjadi "Aktif"',
               ),
-              
               const SizedBox(height: 12),
-              
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: _paymentType == 'dp' ? Colors.teal[600]! : Colors.grey[300]!,
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  color: _paymentType == 'dp' ? Colors.teal[50] : Colors.white,
-                ),
-                child: RadioListTile<String>(
-                  title: Text(
-                    'DP (50%)',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Rp ${_dpAmount.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.orange[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  value: 'dp',
-                  groupValue: _paymentType,
-                  onChanged: (value) {
-                    setState(() {
-                      _paymentType = value!;
-                    });
-                  },
-                  activeColor: Colors.teal[600],
-                ),
+              _buildPaymentTypeOption(
+                'dp',
+                'DP (50%)',
+                'Rp ${_formatCurrency(_dpAmount)}',
+                'Status sewa menjadi "Dikonfirmasi"',
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentTypeOption(String value, String title, String amount, String description) {
+    final isSelected = _paymentType == value;
+    
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isSelected ? Colors.teal[600]! : Colors.grey[300]!,
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        color: isSelected ? Colors.teal[50] : Colors.white,
+      ),
+      child: RadioListTile<String>(
+        title: Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[800],
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              amount,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.green[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Text(
+              description,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        value: value,
+        groupValue: _paymentType,
+        onChanged: (val) {
+          setState(() {
+            _paymentType = val!;
+          });
+        },
+        activeColor: Colors.teal[600],
       ),
     );
   }
@@ -747,77 +739,91 @@ class _PaymentPageState extends State<PaymentPage>
           
           const SizedBox(height: 12),
           
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Total Sewa:',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
-              ),
-              Text(
-                'Rp ${_totalAmount.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ],
+          _buildSummaryRow('Total Sewa:', 'Rp ${_formatCurrency(_totalAmount)}'),
+          
+          if (widget.rental.paidAmount > 0)
+            _buildSummaryRow('Sudah Dibayar:', 'Rp ${_formatCurrency(widget.rental.paidAmount)}'),
+          
+          const Divider(color: Colors.teal),
+          
+          _buildSummaryRow(
+            'Yang Harus Dibayar:',
+            'Rp ${_formatCurrency(_paymentAmount)}',
+            isHighlight: true,
           ),
           
-          if (widget.rental.paidAmount > 0) ...[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const SizedBox(height: 8),
+          
+          // FIXED: Show expected status after payment
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Row(
               children: [
-                Text(
-                  'Sudah Dibayar:',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                Text(
-                  'Rp ${widget.rental.paidAmount.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.green[600],
-                    fontWeight: FontWeight.w500,
+                Icon(Icons.info_outline, color: Colors.blue[700], size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Setelah pembayaran, status sewa akan menjadi "${_getStatusLabel(_expectedRentalStatusAfterPayment)}"',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.blue[700],
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
-          
-          const Divider(color: Colors.teal),
-          
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Yang Harus Dibayar:',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-              Text(
-                'Rp ${_paymentAmount.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.teal[700],
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: isHighlight ? 16 : 14,
+              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: isHighlight ? 16 : 14,
+                fontWeight: isHighlight ? FontWeight.bold : FontWeight.w600,
+                color: isHighlight ? Colors.teal[700] : Colors.grey[800],
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status) {
+      case 'confirmed':
+        return 'Dikonfirmasi';
+      case 'active':
+        return 'Aktif';
+      case 'pending':
+        return 'Menunggu';
+      default:
+        return status;
+    }
   }
 
   Widget _buildPaymentMethods() {
@@ -904,6 +910,8 @@ class _PaymentPageState extends State<PaymentPage>
                                 fontSize: 12,
                                 color: Colors.grey[600],
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -961,7 +969,7 @@ class _PaymentPageState extends State<PaymentPage>
                       ],
                     )
                   : Text(
-                      'Bayar Sekarang (Rp ${_paymentAmount.toStringAsFixed(0)})',
+                      'Bayar Sekarang (Rp ${_formatCurrency(_paymentAmount)})',
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

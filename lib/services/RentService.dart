@@ -175,6 +175,36 @@ class RentService {
       return null;
     }
   }
+
+
+  /// Mark the rental as completed (status = "completed") and notify user
+  static Future<bool> completeRental(String rentalId) async {
+    try {
+      // Pastikan rental ada
+      final rental = await HiveService.getRental(rentalId);
+      if (rental == null) {
+        throw Exception('Rental tidak ditemukan');
+      }
+
+      // Hanya rental dengan status "active" yang bisa diselesaikan
+      if (rental.status != 'active') {
+        throw Exception(
+          'Tidak dapat menyelesaikan rental dengan status: ${rental.status}',
+        );
+      }
+
+      // Update status di Hive dan kirim notifikasi via updateRentalStatus
+      final updated = await updateRentalStatus(rentalId, 'completed');
+      if (updated == null) {
+        throw Exception('Gagal update status ke completed');
+      }
+
+      return true;
+    } catch (e) {
+      print('❌ Error completing rental: $e');
+      return false;
+    }
+  }
   /// Pay remaining amount for rental
   static Future<Rent?> payRemainingAmount(String rentalId) async {
     try {
@@ -562,3 +592,5 @@ static Future<void> checkAndSendReminders() async {
     }
   }
 }
+
+  

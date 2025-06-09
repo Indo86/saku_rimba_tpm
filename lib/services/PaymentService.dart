@@ -1,8 +1,8 @@
 import '../services/HiveService.dart';
 import '../services/NotificationService.dart';
 import '../services/UserService.dart';
+import '../services/RentService.dart'; // FIXED: Import RentService
 import '../models/rent.dart';
-import 'RentService.dart';
 
 class PaymentService {
   // Payment methods
@@ -17,11 +17,11 @@ class PaymentService {
   static const String STATUS_FAILED = 'failed';
   static const String STATUS_CANCELLED = 'cancelled';
 
-static Future<bool> processPayment({
+  static Future<bool> processPayment({
     required String rentalId,
     required double amount,
     required String paymentMethod,
-    required String paymentType, // 'full' or 'dp'
+    required String paymentType, // 'full', 'dp', or 'remaining'
   }) async {
     try {
       print('🏦 Processing payment for rental: $rentalId');
@@ -33,14 +33,25 @@ static Future<bool> processPayment({
       final Rent? rental = await RentService.getRental(rentalId);
       if (rental == null) throw Exception('Rental not found');
 
-      // 2. Simulasikan pemrosesan pembayaran
+      // 2. Validasi payment amount
+      if (!_validatePaymentAmount(rental, amount, paymentType)) {
+        throw Exception('Invalid payment amount for payment type');
+      }
+
+      // 3. Simulasikan pemrosesan pembayaran
       await _simulatePaymentProcessing(paymentMethod);
 
-      // 3. Hitung status baru dan update di Hive
-      final String newStatus = paymentType == 'full' ? 'paid' : 'dp';
+      // 4. FIXED: Update payment status dan rental status dengan logic yang benar
+      final String newPaymentStatus = _determinePaymentStatus(rental, paymentType, amount);
+      final String newRentalStatus = _determineRentalStatus(rental, newPaymentStatus, paymentType);
+      
+      print('💡 Payment status will be: $newPaymentStatus');
+      print('💡 Rental status will be: $newRentalStatus');
+
+      // 5. Update rental payment
       final Rent? updatedRental = await HiveService.updateRentalPayment(
         rentalId,
-        newStatus,
+        newPaymentStatus,
         amount,
       );
       if (updatedRental == null) {
@@ -48,16 +59,22 @@ static Future<bool> processPayment({
         return false;
       }
 
-      // 4. Kirim notifikasi pembayaran
+      // 6. FIXED: Update rental status based on payment
+      if (newRentalStatus != updatedRental.status) {
+        await RentService.updateRentalStatus(rentalId, newRentalStatus);
+        print('✅ Rental status updated to: $newRentalStatus');
+      }
+
+      // 7. Kirim notifikasi pembayaran
       await NotificationService.sendPaymentNotification(
         userId: updatedRental.userId,
         rentalId: rentalId,
         amount: amount,
-        type: newStatus,
+        type: newPaymentStatus,
       );
 
-      // 5. Log pembayaran
-      await _logPayment(rentalId, amount, paymentMethod, paymentType);
+      // 8. Log pembayaran
+      await _logPayment(rentalId, amount, paymentMethod, paymentType, newRentalStatus);
 
       print('✅ Payment processed successfully');
       return true;
@@ -67,22 +84,66 @@ static Future<bool> processPayment({
     }
   }
 
-
-  /// Calculate expected payment amount
-  static double _calculateExpectedAmount(Rent rental, String paymentType) {
+  // FIXED: Validate payment amount based on type
+  static bool _validatePaymentAmount(Rent rental, double amount, String paymentType) {
     switch (paymentType) {
       case 'dp':
-        return rental.totalPrice * 0.5;
+        final expectedDp = rental.totalPrice * 0.5;
+        return amount >= expectedDp * 0.99 && amount <= expectedDp * 1.01; // Allow 1% variance
       case 'full':
         if (rental.paymentStatus == 'dp') {
-          // Remaining amount after DP
-          return rental.totalPrice - rental.paidAmount;
+          // Paying remaining amount
+          return amount >= rental.totalPrice - rental.paidAmount - 1.0; // Allow small variance
         } else {
-          // Full amount
-          return rental.totalPrice;
+          // Paying full amount from scratch
+          return amount >= rental.totalPrice - 1.0;
+        }
+      case 'remaining':
+        final remainingAmount = rental.totalPrice - rental.paidAmount;
+        return amount >= remainingAmount - 1.0;
+      default:
+        return false;
+    }
+  }
+
+  // FIXED: Determine payment status based on payment type and amount
+  static String _determinePaymentStatus(Rent rental, String paymentType, double amount) {
+    switch (paymentType) {
+      case 'dp':
+        return 'dp';
+      case 'full':
+        if (rental.paymentStatus == 'dp') {
+          // This is remaining payment
+          return 'paid';
+        } else {
+          // This is full payment from scratch
+          return 'paid';
+        }
+      case 'remaining':
+        return 'paid';
+      default:
+        return rental.paymentStatus;
+    }
+  }
+
+  // FIXED: Determine rental status based on payment status and type
+  static String _determineRentalStatus(Rent rental, String newPaymentStatus, String paymentType) {
+    // Business logic:
+    // - DP payment (50%) -> rental status becomes "confirmed"
+    // - Full payment -> rental status becomes "active" 
+    // - Remaining payment (completing DP) -> rental status becomes "active"
+    
+    switch (newPaymentStatus) {
+      case 'dp':
+        return 'confirmed'; // DP paid -> confirmed
+      case 'paid':
+        if (paymentType == 'full' || paymentType == 'remaining') {
+          return 'active'; // Full payment or remaining payment -> active
+        } else {
+          return 'confirmed'; // Fallback
         }
       default:
-        return rental.totalPrice;
+        return rental.status; // Keep current status
     }
   }
 
@@ -115,61 +176,13 @@ static Future<bool> processPayment({
     }
   }
 
-  /// Update rental payment status
-static Future<bool> _updateRentalPaymentStatus(
-    Rent rental,
-    double amount,
-    String newStatus,
-  ) async {
-    try {
-      // Call HiveService.updateRentalPayment, returns updated Rent or null
-      final Rent? updated = await HiveService.updateRentalPayment(
-        rental.id,
-        newStatus,
-        amount,
-      );
-      return updated != null;
-    } catch (e) {
-      print('❌ Error updating rental payment status: \$e');
-      return false;
-    }
-  }
-
-
-  /// Send payment notification
-  static Future<void> _sendPaymentNotification(
-    Rent rental, 
-    double amount, 
-    String paymentMethod
-  ) async {
-    try {
-      final userId = UserService.getCurrentUserId();
-      if (userId == null) return;
-      
-      final methodName = _getPaymentMethodName(paymentMethod);
-      
-      await NotificationService.createNotification(
-        userId: userId,
-        title: 'Pembayaran Berhasil',
-        message: 'Pembayaran sebesar Rp ${amount.toStringAsFixed(0)} untuk sewa ${rental.peralatanNama} berhasil diproses via $methodName.',
-        type: 'payment',
-        data: {
-          'rental_id': rental.id,
-          'amount': amount,
-          'payment_method': paymentMethod,
-        },
-      );
-    } catch (e) {
-      print('❌ Error sending payment notification: $e');
-    }
-  }
-
   /// Log payment for record keeping
   static Future<void> _logPayment(
     String rentalId,
     double amount, 
     String paymentMethod, 
-    String paymentType
+    String paymentType,
+    String finalRentalStatus, // FIXED: Add final rental status to log
   ) async {
     try {
       final paymentLog = {
@@ -179,6 +192,7 @@ static Future<bool> _updateRentalPaymentStatus(
         'amount': amount,
         'payment_method': paymentMethod,
         'payment_type': paymentType,
+        'rental_status_after': finalRentalStatus, // FIXED: Log final rental status
         'status': STATUS_SUCCESS,
         'created_at': DateTime.now().toIso8601String(),
       };
@@ -194,7 +208,7 @@ static Future<bool> _updateRentalPaymentStatus(
       
       await HiveService.saveSetting('payment_logs', paymentLogs);
       
-      print('📝 Payment logged successfully');
+      print('📝 Payment logged successfully with rental status: $finalRentalStatus');
     } catch (e) {
       print('❌ Error logging payment: $e');
     }
@@ -297,7 +311,7 @@ static Future<bool> _updateRentalPaymentStatus(
     }
   }
 
-static Future<bool> refundPayment({
+  static Future<bool> refundPayment({
     required String rentalId,
     required double amount,
     required String reason,
@@ -319,7 +333,7 @@ static Future<bool> refundPayment({
       // 3. Simulasikan pemrosesan refund
       await Future.delayed(const Duration(seconds: 2));
 
-      // 4. Kurangi paidAmount dan update paymentStatus di Hive
+      // 4. Update payment dengan refund
       final double refundedPaid = rental.paidAmount - amount;
       final String refundStatus = refundedPaid <= 0 ? 'refunded' : 'partial';
       final Rent? updatedRental = await HiveService.updateRentalPayment(
@@ -332,10 +346,16 @@ static Future<bool> refundPayment({
         return false;
       }
 
-      // 5. Log refund
+      // 5. FIXED: Update rental status if fully refunded
+      if (refundStatus == 'refunded') {
+        await RentService.updateRentalStatus(rentalId, 'cancelled');
+        print('✅ Rental status updated to cancelled due to full refund');
+      }
+
+      // 6. Log refund
       await _logRefund(rentalId, amount, reason);
 
-      // 6. Kirim notifikasi refund
+      // 7. Kirim notifikasi refund
       await NotificationService.sendPaymentNotification(
         userId: updatedRental.userId,
         rentalId: rentalId,
@@ -379,32 +399,6 @@ static Future<bool> refundPayment({
     }
   }
 
-  /// Send refund notification
-  static Future<void> _sendRefundNotification(
-    Rent rental,
-    double amount,
-    String reason,
-  ) async {
-    try {
-      final userId = UserService.getCurrentUserId();
-      if (userId == null) return;
-      
-      await NotificationService.createNotification(
-        userId: userId,
-        title: 'Refund Diproses',
-        message: 'Refund sebesar Rp ${amount.toStringAsFixed(0)} untuk sewa ${rental.peralatanNama} sedang diproses. Alasan: $reason',
-        type: 'payment',
-        data: {
-          'rental_id': rental.id,
-          'refund_amount': amount,
-          'reason': reason,
-        },
-      );
-    } catch (e) {
-      print('❌ Error sending refund notification: $e');
-    }
-  }
-
   /// Check if rental can be paid
   static bool canMakePayment(Rent rental) {
     return rental.paymentStatus != 'paid' && 
@@ -422,6 +416,33 @@ static Future<bool> refundPayment({
             DateTime.now().isBefore(rental.startDate));
   }
 
+  /// FIXED: Get payment type name helper with better descriptions
+  static String getPaymentTypeName(String type) {
+    switch (type) {
+      case 'full':
+        return 'Pembayaran Penuh';
+      case 'dp':
+        return 'Down Payment (DP 50%)';
+      case 'remaining':
+        return 'Pelunasan Sisa';
+      default:
+        return type;
+    }
+  }
+
+  /// FIXED: Get rental status after payment helper
+  static String getRentalStatusAfterPayment(String paymentType, String currentStatus) {
+    switch (paymentType) {
+      case 'dp':
+        return 'confirmed'; // DP -> confirmed
+      case 'full':
+      case 'remaining':
+        return 'active'; // Full payment -> active
+      default:
+        return currentStatus;
+    }
+  }
+
   /// Debug method
   static Future<void> printPaymentDebug() async {
     try {
@@ -436,6 +457,7 @@ static Future<bool> refundPayment({
       if (history.isNotEmpty) {
         final recent = history.first;
         print('💳 Recent Payment: ${recent['amount']} via ${recent['payment_method']}');
+        print('💳 Final Rental Status: ${recent['rental_status_after']}');
       }
       
       print('==============================');

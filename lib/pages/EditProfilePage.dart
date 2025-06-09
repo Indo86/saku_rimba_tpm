@@ -1,10 +1,11 @@
-// FIXED: Editable Message & Review - EditProfilePage.dart
+// FIXED: EditProfilePage.dart - Profile Image Handling & Static Content
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../services/UserService.dart';
-import '../services/HiveService.dart'; // FIXED: Add HiveService for custom message storage
 import '../models/user.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -22,59 +23,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   
-  // FIXED: Add controllers for editable message and review
-  final _messageController = TextEditingController();
-  final _reviewController = TextEditingController();
-  final _learningPointsController = TextEditingController();
-  final _gratitudeController = TextEditingController();
-  
   File? _selectedImage;
   bool _isLoading = false;
   User? _currentUser;
   final ImagePicker _picker = ImagePicker();
 
-  // FIXED: Default content
-  String _defaultMessage = '';
-  String _defaultReview = '';
-  String _defaultLearningPoints = '';
-  String _defaultGratitude = '';
-
   @override
   void initState() {
     super.initState();
-    _initializeDefaultContent();
     _loadUserData();
-    _loadCustomMessages();
-  }
-
-  void _initializeDefaultContent() {
-    _defaultMessage = '''Mata kuliah Teknologi dan Pemrograman Mobile ini sangat menarik dan memberikan pemahaman mendalam tentang pengembangan aplikasi mobile modern. Melalui pembelajaran Flutter, saya dapat memahami konsep cross-platform development yang sangat efisien.
-
-Flutter framework memberikan pengalaman development yang luar biasa dengan hot reload feature yang memungkinkan perubahan code langsung terlihat hasilnya. Dart sebagai bahasa pemrograman juga mudah dipelajari dengan syntax yang clean dan modern.''';
-
-    _defaultReview = '''Pembelajaran mobile programming memberikan insight baru tentang:
-• User Experience (UX) design yang responsive
-• State management yang efektif
-• Integration dengan berbagai API dan services
-• Performance optimization untuk mobile apps
-• Cross-platform development best practices
-
-Setiap tugas dan project memberikan challenge yang berbeda, mulai dari UI design hingga complex business logic implementation.''';
-
-    _defaultLearningPoints = '''• Dart Programming Language & Advanced Features
-• Flutter Framework & Custom Widgets
-• State Management (Provider, Bloc, Riverpod)
-• API Integration & RESTful Web Services
-• Local Database (Hive/SQLite) & Data Persistence
-• Device Sensor Integration (GPS, Camera, etc.)
-• Location-Based Services & Maps Integration
-• Push Notifications & Background Processing
-• App Performance Optimization
-• Testing & Debugging Techniques''';
-
-    _defaultGratitude = '''Terima kasih kepada dosen pengampu yang telah membimbing dengan sabar dan memberikan ilmu yang sangat bermanfaat! 
-
-Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset problem-solving yang akan berguna dalam karir development ke depan. Semoga ilmu yang didapat dapat diterapkan untuk menciptakan aplikasi yang bermanfaat bagi masyarakat.''';
   }
 
   void _loadUserData() {
@@ -88,126 +45,32 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     }
   }
 
-  // FIXED: Load custom messages from storage
-  Future<void> _loadCustomMessages() async {
+  // FIXED: Save image to app directory and return the path
+  Future<String?> _saveImageToAppDirectory(File imageFile) async {
     try {
-      final userId = UserService.getCurrentUserId();
-      if (userId == null) return;
-
-      final customMessage = await HiveService.getSetting<String>('custom_message_$userId');
-      final customReview = await HiveService.getSetting<String>('custom_review_$userId');
-      final customLearningPoints = await HiveService.getSetting<String>('custom_learning_$userId');
-      final customGratitude = await HiveService.getSetting<String>('custom_gratitude_$userId');
-
-      setState(() {
-        _messageController.text = customMessage ?? _defaultMessage;
-        _reviewController.text = customReview ?? _defaultReview;
-        _learningPointsController.text = customLearningPoints ?? _defaultLearningPoints;
-        _gratitudeController.text = customGratitude ?? _defaultGratitude;
-      });
+      // Get app documents directory
+      final Directory appDocDir = await getApplicationDocumentsDirectory();
+      final String profileImagesDir = '${appDocDir.path}/profile_images';
+      
+      // Create profile_images directory if it doesn't exist
+      final Directory profileDir = Directory(profileImagesDir);
+      if (!await profileDir.exists()) {
+        await profileDir.create(recursive: true);
+      }
+      
+      // Generate unique filename
+      final String fileName = 'profile_${_currentUser!.username}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String savedImagePath = '$profileImagesDir/$fileName';
+      
+      // Copy image to app directory
+      final File savedImage = await imageFile.copy(savedImagePath);
+      
+      print('✅ Profile image saved to: ${savedImage.path}');
+      return savedImage.path;
     } catch (e) {
-      print('❌ Error loading custom messages: $e');
-      // Use default content if loading fails
-      setState(() {
-        _messageController.text = _defaultMessage;
-        _reviewController.text = _defaultReview;
-        _learningPointsController.text = _defaultLearningPoints;
-        _gratitudeController.text = _defaultGratitude;
-      });
+      print('❌ Error saving image: $e');
+      return null;
     }
-  }
-
-  // FIXED: Save custom messages to storage
-  Future<void> _saveCustomMessages() async {
-    try {
-      final userId = UserService.getCurrentUserId();
-      if (userId == null) return;
-
-      await HiveService.saveSetting('custom_message_$userId', _messageController.text.trim());
-      await HiveService.saveSetting('custom_review_$userId', _reviewController.text.trim());
-      await HiveService.saveSetting('custom_learning_$userId', _learningPointsController.text.trim());
-      await HiveService.saveSetting('custom_gratitude_$userId', _gratitudeController.text.trim());
-
-      print('✅ Custom messages saved successfully');
-    } catch (e) {
-      print('❌ Error saving custom messages: $e');
-      throw Exception('Gagal menyimpan pesan kustom');
-    }
-  }
-
-  // FIXED: Reset to default content
-  void _resetToDefault() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.refresh, color: Colors.orange[600]),
-            const SizedBox(width: 8),
-            Text(
-              'Reset ke Default',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Apakah Anda yakin ingin mengembalikan semua pesan dan kesan ke konten default?',
-          style: GoogleFonts.poppins(
-            color: Colors.grey[700],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Batal',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _messageController.text = _defaultMessage;
-                _reviewController.text = _defaultReview;
-                _learningPointsController.text = _defaultLearningPoints;
-                _gratitudeController.text = _defaultGratitude;
-              });
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Konten telah direset ke default',
-                    style: GoogleFonts.poppins(),
-                  ),
-                  backgroundColor: Colors.orange[600],
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              'Reset',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _pickImage() async {
@@ -357,7 +220,18 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     setState(() => _isLoading = true);
 
     try {
-      String? imageUrl = _selectedImage?.path ?? _currentUser!.profileImage;
+      String? imageUrl = _currentUser!.profileImage;
+
+      // FIXED: Save image to app directory if new image selected
+      if (_selectedImage != null) {
+        final savedImagePath = await _saveImageToAppDirectory(_selectedImage!);
+        if (savedImagePath != null) {
+          imageUrl = savedImagePath;
+          print('✅ Profile image saved and path updated: $savedImagePath');
+        } else {
+          throw Exception('Gagal menyimpan gambar profil');
+        }
+      }
 
       // Update user profile
       final updatedUser = _currentUser!.copyWith(
@@ -366,13 +240,10 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         alamat: _addressController.text.trim(),
-        profileImage: imageUrl,
+        profileImage: imageUrl ?? '',
       );
 
       final userSuccess = await UserService.updateUser(updatedUser);
-      
-      // FIXED: Save custom messages
-      await _saveCustomMessages();
 
       if (userSuccess) {
         if (!mounted) return;
@@ -383,7 +254,7 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
                 Text(
-                  'Profil dan pesan berhasil diperbarui',
+                  'Profil berhasil diperbarui',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -425,10 +296,6 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     _emailController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
-    _messageController.dispose();
-    _reviewController.dispose();
-    _learningPointsController.dispose();
-    _gratitudeController.dispose();
     super.dispose();
   }
 
@@ -477,8 +344,8 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
               
               const SizedBox(height: 32),
               
-              // FIXED: Editable Mobile Programming Message Section
-              _buildEditableMobileProgrammingSection(),
+              // FIXED: Static Mobile Programming Message Section (Not Editable)
+              _buildStaticMobileProgrammingSection(),
               
               const SizedBox(height: 32),
               
@@ -563,20 +430,7 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
                 ],
               ),
               child: ClipOval(
-                child: _selectedImage != null
-                    ? Image.file(
-                        _selectedImage!,
-                        fit: BoxFit.cover,
-                      )
-                    : _currentUser?.profileImage.isNotEmpty == true
-                        ? Image.network(
-                            _currentUser!.profileImage,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _buildDefaultAvatar();
-                            },
-                          )
-                        : _buildDefaultAvatar(),
+                child: _buildProfileImageWidget(),
               ),
             ),
           ),
@@ -599,8 +453,43 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     );
   }
 
+  // FIXED: Better profile image handling
+  Widget _buildProfileImageWidget() {
+    // Priority: Selected image > Current user image > Default avatar
+    if (_selectedImage != null) {
+      return Image.file(
+        _selectedImage!,
+        fit: BoxFit.cover,
+        width: 120,
+        height: 120,
+      );
+    } else if (_currentUser?.profileImage != null && _currentUser!.profileImage.isNotEmpty) {
+      // Check if file exists
+      final imageFile = File(_currentUser!.profileImage);
+      if (imageFile.existsSync()) {
+        return Image.file(
+          imageFile,
+          fit: BoxFit.cover,
+          width: 120,
+          height: 120,
+          errorBuilder: (context, error, stackTrace) {
+            print('❌ Error loading profile image: $error');
+            return _buildDefaultAvatar();
+          },
+        );
+      } else {
+        print('⚠️ Profile image file not found: ${_currentUser!.profileImage}');
+        return _buildDefaultAvatar();
+      }
+    } else {
+      return _buildDefaultAvatar();
+    }
+  }
+
   Widget _buildDefaultAvatar() {
     return Container(
+      width: 120,
+      height: 120,
       color: Colors.grey[300],
       child: Icon(
         Icons.person,
@@ -656,12 +545,10 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
             controller: _usernameController,
             label: 'Username',
             icon: Icons.alternate_email,
+            enabled: false, // Username tidak bisa diubah
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Username diperlukan';
-              }
-              if (value.trim().length < 3) {
-                return 'Username minimal 3 karakter';
               }
               return null;
             },
@@ -728,13 +615,17 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     required IconData icon,
     TextInputType? keyboardType,
     int maxLines = 1,
+    bool enabled = true,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      style: GoogleFonts.poppins(),
+      enabled: enabled,
+      style: GoogleFonts.poppins(
+        color: enabled ? Colors.black : Colors.grey[600],
+      ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.poppins(),
@@ -749,6 +640,12 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
             width: 2,
           ),
         ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Colors.grey[300]!,
+          ),
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 12,
@@ -758,8 +655,8 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
     );
   }
 
-  // FIXED: Editable Mobile Programming Section
-  Widget _buildEditableMobileProgrammingSection() {
+  // FIXED: Static Mobile Programming Section (Not Editable)
+  Widget _buildStaticMobileProgrammingSection() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -798,19 +695,14 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
                   ),
                 ),
               ),
-              IconButton(
-                onPressed: _resetToDefault,
-                icon: Icon(Icons.refresh, color: Colors.orange[600]),
-                tooltip: 'Reset ke Default',
-              ),
             ],
           ),
           
           const SizedBox(height: 16),
           
-          // FIXED: Editable Message Section
+          // Pesan & Kesan (Static)
           Text(
-            '📱 Pesan & Kesan (Editable)',
+            '📱 Pesan & Kesan',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -820,179 +712,136 @@ Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset proble
           
           const SizedBox(height: 8),
           
-          TextFormField(
-            controller: _messageController,
-            maxLines: 6,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey[700],
-              height: 1.5,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Tulis pesan dan kesan Anda tentang mata kuliah Mobile Programming...',
-              hintStyle: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[400],
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[200]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
-              ),
-              fillColor: Colors.white,
-              filled: true,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // FIXED: Editable Review Section
-          Text(
-            '🎯 Review Pembelajaran (Editable)',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          TextFormField(
-            controller: _reviewController,
-            maxLines: 5,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey[700],
-              height: 1.5,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Review detail tentang pembelajaran yang telah dilalui...',
-              hintStyle: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[400],
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[200]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
-              ),
-              fillColor: Colors.white,
-              filled: true,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // FIXED: Editable Learning Points
-          Text(
-            '📚 Yang Dipelajari (Editable)',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          TextFormField(
-            controller: _learningPointsController,
-            maxLines: 8,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.grey[700],
-            ),
-            decoration: InputDecoration(
-              hintText: 'Daftar materi yang dipelajari (gunakan • untuk bullet points)...',
-              hintStyle: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[400],
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[200]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
-              ),
-              fillColor: Colors.white,
-              filled: true,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // FIXED: Editable Gratitude Section
-          Text(
-            '💝 Ucapan Terima Kasih (Editable)',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          TextFormField(
-            controller: _gratitudeController,
-            maxLines: 4,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-              color: Colors.teal[700],
-            ),
-            decoration: InputDecoration(
-              hintText: 'Ucapan terima kasih kepada dosen dan yang terlibat...',
-              hintStyle: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[400],
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[200]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.teal[600]!, width: 2),
-              ),
-              fillColor: Colors.teal[25],
-              filled: true,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Helper Text
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!),
+              border: Border.all(color: Colors.teal[200]!),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.info, color: Colors.blue[600], size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Tip: Anda dapat mengedit semua bagian sesuai pengalaman pribadi. Gunakan tombol refresh untuk kembali ke konten default.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: Colors.blue[700],
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              '''Mata kuliah Teknologi dan Pemrograman Mobile ini sangat menarik dan memberikan pemahaman mendalam tentang pengembangan aplikasi mobile modern. Melalui pembelajaran Flutter, saya dapat memahami konsep cross-platform development yang sangat efisien.
+
+Flutter framework memberikan pengalaman development yang luar biasa dengan hot reload feature yang memungkinkan perubahan code langsung terlihat hasilnya. Dart sebagai bahasa pemrograman juga mudah dipelajari dengan syntax yang clean dan modern.''',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey[700],
+                height: 1.5,
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Review Pembelajaran (Static)
+          Text(
+            '🎯 Review Pembelajaran',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.teal[200]!),
+            ),
+            child: Text(
+              '''Pembelajaran mobile programming memberikan insight baru tentang:
+• User Experience (UX) design yang responsive
+• State management yang efektif
+• Integration dengan berbagai API dan services
+• Performance optimization untuk mobile apps
+• Cross-platform development best practices
+
+Setiap tugas dan project memberikan challenge yang berbeda, mulai dari UI design hingga complex business logic implementation.''',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey[700],
+                height: 1.5,
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Yang Dipelajari (Static)
+          Text(
+            '📚 Yang Dipelajari',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.teal[200]!),
+            ),
+            child: Text(
+              '''• Dart Programming Language & Advanced Features
+• Flutter Framework & Custom Widgets
+• State Management (Provider, Bloc, Riverpod)
+• API Integration & RESTful Web Services
+• Local Database (Hive/SQLite) & Data Persistence
+• Device Sensor Integration (GPS, Camera, etc.)
+• Location-Based Services & Maps Integration
+• Push Notifications & Background Processing
+• App Performance Optimization
+• Testing & Debugging Techniques''',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Ucapan Terima Kasih (Static)
+          Text(
+            '💝 Ucapan Terima Kasih',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.teal[25],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.teal[200]!),
+            ),
+            child: Text(
+              '''Terima kasih kepada dosen pengampu yang telah membimbing dengan sabar dan memberikan ilmu yang sangat bermanfaat! 
+
+Pembelajaran ini tidak hanya memberikan skill teknis, tetapi juga mindset problem-solving yang akan berguna dalam karir development ke depan. Semoga ilmu yang didapat dapat diterapkan untuk menciptakan aplikasi yang bermanfaat bagi masyarakat.''',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Colors.teal[700],
+              ),
             ),
           ),
         ],

@@ -1,7 +1,8 @@
-// NEW: Camping Map Navigation - CampingMapPage.dart
+// IMPROVED: CampingMapPage.dart - Real Indonesian Data & Better UX
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/LocationService.dart';
 import '../services/UserService.dart';
 
@@ -17,6 +18,7 @@ class _CampingMapPageState extends State<CampingMapPage>
   List<Map<String, dynamic>> _campingSpots = [];
   List<Map<String, dynamic>> _rentalShops = [];
   List<Map<String, dynamic>> _filteredSpots = [];
+  List<Map<String, dynamic>> _filteredShops = [];
   bool _isLoading = true;
   String _errorMessage = '';
   String _selectedFilter = 'Semua';
@@ -61,6 +63,7 @@ class _CampingMapPageState extends State<CampingMapPage>
     _fadeController.forward();
   }
 
+  /// IMPROVED: Load location data using LocationService with real Indonesian data
   Future<void> _loadLocationData() async {
     try {
       setState(() {
@@ -71,15 +74,20 @@ class _CampingMapPageState extends State<CampingMapPage>
       // Initialize location service
       await LocationService.init();
       
+      // Check if location service is available
+      if (!LocationService.isLocationEnabled) {
+        throw Exception('Layanan lokasi tidak aktif. Silakan aktifkan GPS.');
+      }
+      
       // Get current location for context
       final position = await LocationService.getCurrentLocation();
       final address = LocationService.currentAddress;
       
       setState(() {
-        _currentLocation = address ?? 'Lokasi tidak tersedia';
+        _currentLocation = address ?? 'Lokasi terdeteksi: ${position?.latitude.toStringAsFixed(4)}, ${position?.longitude.toStringAsFixed(4)}';
       });
 
-      // Load nearby camping spots and rental shops
+      // Load nearby camping spots and rental shops with real data
       final spots = await LocationService.findNearbyCampingSpots(
         radiusKm: _radiusKm,
       );
@@ -92,15 +100,20 @@ class _CampingMapPageState extends State<CampingMapPage>
         _campingSpots = spots;
         _rentalShops = shops;
         _filteredSpots = spots;
+        _filteredShops = shops;
         _isLoading = false;
       });
 
       _applyFilter();
+      
+      print('✅ Loaded ${spots.length} camping spots and ${shops.length} rental shops');
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Gagal memuat data lokasi: $e';
+        _errorMessage = e.toString();
       });
+      
+      print('❌ Error loading location data: $e');
     }
   }
 
@@ -114,6 +127,9 @@ class _CampingMapPageState extends State<CampingMapPage>
           return type.toLowerCase().contains(_selectedFilter.toLowerCase());
         }).toList();
       }
+      
+      // Shops are not filtered by type, only by radius
+      _filteredShops = _rentalShops;
     });
   }
 
@@ -131,7 +147,7 @@ class _CampingMapPageState extends State<CampingMapPage>
     _loadLocationData(); // Reload with new radius
   }
 
-  // FIXED: Open navigation to destination
+  /// IMPROVED: Open navigation with better error handling and multiple options
   Future<void> _openNavigation(Map<String, dynamic> destination) async {
     try {
       final lat = destination['latitude'] as double?;
@@ -157,50 +173,57 @@ class _CampingMapPageState extends State<CampingMapPage>
     }
   }
 
-  void _showNavigationOptions(double lat, double lng, String name) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+void _showNavigationOptions(double lat, double lng, String name) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      // supaya bottom inset (keyboard / gesture bar) di-handle
+      final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Pilih Aplikasi Navigasi',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Menuju: $name',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Column(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                // drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Pilih Aplikasi Navigasi',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Menuju: $name',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // list opsi
                 _buildNavigationOption(
                   'Google Maps',
                   Icons.map,
@@ -228,14 +251,16 @@ class _CampingMapPageState extends State<CampingMapPage>
                   Colors.orange[600]!,
                   () => _launchBrowserMaps(lat, lng, name),
                 ),
+                const SizedBox(height: 16),
               ],
             ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
+}
+
 
   Widget _buildNavigationOption(String name, IconData icon, Color color, VoidCallback onTap) {
     return InkWell(
@@ -275,9 +300,9 @@ class _CampingMapPageState extends State<CampingMapPage>
     );
   }
 
-  // Navigation app launchers
+  // Navigation app launchers with better URL formats
   Future<void> _launchGoogleMaps(double lat, double lng, String name) async {
-    final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng&query_place_id=$name';
+    final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
     await _launchUrl(url, 'Google Maps');
   }
 
@@ -287,7 +312,8 @@ class _CampingMapPageState extends State<CampingMapPage>
   }
 
   Future<void> _launchAppleMaps(double lat, double lng, String name) async {
-    final url = 'https://maps.apple.com/?q=$name&ll=$lat,$lng';
+    final encodedName = Uri.encodeComponent(name);
+    final url = 'https://maps.apple.com/?q=$encodedName&ll=$lat,$lng';
     await _launchUrl(url, 'Apple Maps');
   }
 
@@ -304,6 +330,18 @@ class _CampingMapPageState extends State<CampingMapPage>
       if (canLaunch) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
         Navigator.pop(context); // Close the bottom sheet
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Membuka $appName...',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.green[600],
+            duration: const Duration(seconds: 2),
+          ),
+        );
       } else {
         throw Exception('Tidak dapat membuka $appName');
       }
@@ -321,13 +359,14 @@ class _CampingMapPageState extends State<CampingMapPage>
     }
   }
 
+  /// IMPROVED: Show detailed destination information
   void _showDestinationDetail(Map<String, dynamic> destination) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
+        height: MediaQuery.of(context).size.height * 0.8,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.only(
@@ -385,13 +424,14 @@ class _CampingMapPageState extends State<CampingMapPage>
                                 color: Colors.grey[800],
                               ),
                             ),
-                            Text(
-                              '${(destination['distance'] as double? ?? 0).toStringAsFixed(1)} km dari Anda',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: Colors.grey[600],
+                            if (destination['distance'] != null)
+                              Text(
+                                '${(destination['distance'] as double).toStringAsFixed(1)} km dari Anda',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -412,9 +452,14 @@ class _CampingMapPageState extends State<CampingMapPage>
                     _buildInfoSection('Informasi Dasar', [
                       _buildInfoRow('Lokasi', destination['location'] ?? 'Tidak tersedia'),
                       _buildInfoRow('Jenis', destination['type'] ?? 'Camping'),
-                      _buildInfoRow('Rating', '⭐ ${destination['rating'] ?? 'N/A'}'),
+                      if (destination['rating'] != null)
+                        _buildInfoRow('Rating', '⭐ ${destination['rating']}'),
                       if (destination['elevation'] != null)
                         _buildInfoRow('Ketinggian', '${destination['elevation']} mdpl'),
+                      if (destination['difficulty'] != null)
+                        _buildInfoRow('Tingkat Kesulitan', destination['difficulty']),
+                      if (destination['estimatedTime'] != null)
+                        _buildInfoRow('Estimasi Waktu', destination['estimatedTime']),
                     ]),
                     
                     const SizedBox(height: 20),
@@ -425,14 +470,20 @@ class _CampingMapPageState extends State<CampingMapPage>
                     
                     const SizedBox(height: 20),
                     
+                    // Facilities
+                    if (destination['facilities'] != null)
+                      _buildFacilitiesSection(destination['facilities']),
+                    
+                    const SizedBox(height: 20),
+                    
                     // Description
                     if (destination['description'] != null)
                       _buildDescriptionSection(destination['description']),
                     
                     const SizedBox(height: 20),
                     
-                    // Weather info (if available)
-                    _buildWeatherSection(),
+                    // Tips
+                    _buildTipsSection(destination),
                     
                     const SizedBox(height: 20),
                     
@@ -483,6 +534,8 @@ class _CampingMapPageState extends State<CampingMapPage>
         return Icons.forest;
       case 'danau':
         return Icons.water;
+      case 'perbukitan':
+        return Icons.landscape;
       default:
         return Icons.place;
     }
@@ -521,7 +574,7 @@ class _CampingMapPageState extends State<CampingMapPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 80,
+            width: 100,
             child: Text(
               label,
               style: GoogleFonts.poppins(
@@ -578,6 +631,43 @@ class _CampingMapPageState extends State<CampingMapPage>
     );
   }
 
+  Widget _buildFacilitiesSection(List<dynamic> facilities) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fasilitas Tersedia',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: facilities.map((facility) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green[100],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.green[300]!),
+            ),
+            child: Text(
+              facility.toString(),
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.green[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )).toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDescriptionSection(String description) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,7 +693,7 @@ class _CampingMapPageState extends State<CampingMapPage>
     );
   }
 
-  Widget _buildWeatherSection() {
+  Widget _buildTipsSection(Map<String, dynamic> destination) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -616,10 +706,10 @@ class _CampingMapPageState extends State<CampingMapPage>
         children: [
           Row(
             children: [
-              Icon(Icons.wb_sunny, color: Colors.orange[600], size: 16),
+              Icon(Icons.lightbulb, color: Colors.orange[600], size: 16),
               const SizedBox(width: 8),
               Text(
-                'Info Cuaca Camping',
+                'Tips Camping',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -630,7 +720,7 @@ class _CampingMapPageState extends State<CampingMapPage>
           ),
           const SizedBox(height: 8),
           Text(
-            'Cuaca hari ini: Cerah, 25°C\nAngin: 5 km/h • Kelembaban: 65%\nSaran: Bawa jaket untuk malam hari',
+            _getCampingTips(destination),
             style: GoogleFonts.poppins(
               fontSize: 12,
               color: Colors.orange[700],
@@ -639,6 +729,28 @@ class _CampingMapPageState extends State<CampingMapPage>
         ],
       ),
     );
+  }
+
+  String _getCampingTips(Map<String, dynamic> destination) {
+    final type = destination['type'] as String? ?? '';
+    final elevation = destination['elevation'] as int? ?? 0;
+    
+    switch (type.toLowerCase()) {
+      case 'gunung':
+        if (elevation > 2000) {
+          return 'Bawa jaket tebal, suhu bisa mencapai 5-10°C di malam hari. Siapkan sleeping bag yang sesuai. Cek cuaca sebelum mendaki.';
+        } else {
+          return 'Bawa jaket ringan untuk malam hari. Pastikan kondisi fisik prima. Jangan lupa bawa air yang cukup.';
+        }
+      case 'pantai':
+        return 'Gunakan sunscreen dan topi. Bawa air tawar untuk mandi. Waspada air pasang. Siapkan tenda yang tahan angin.';
+      case 'danau':
+        return 'Lokasi biasanya lembab, bawa pakaian ganti. Hati-hati dengan tepi danau yang licin. Manfaatkan air untuk keperluan masak.';
+      case 'hutan':
+        return 'Bawa obat nyamuk dan antiseptik. Gunakan sepatu tertutup. Jangan tinggalkan makanan terbuka. Waspada satwa liar.';
+      default:
+        return 'Selalu bawa P3K, senter, dan power bank. Cek kondisi cuaca. Beritahu rencana perjalanan ke keluarga.';
+    }
   }
 
   @override
@@ -844,7 +956,7 @@ class _CampingMapPageState extends State<CampingMapPage>
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_rentalShops.isEmpty) {
+    if (_filteredShops.isEmpty) {
       return _buildEmptyWidget('rental shops');
     }
 
@@ -852,9 +964,9 @@ class _CampingMapPageState extends State<CampingMapPage>
       onRefresh: _loadLocationData,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _rentalShops.length,
+        itemCount: _filteredShops.length,
         itemBuilder: (context, index) {
-          return _buildRentalShopCard(_rentalShops[index]);
+          return _buildRentalShopCard(_filteredShops[index]);
         },
       ),
     );
@@ -913,14 +1025,15 @@ class _CampingMapPageState extends State<CampingMapPage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '${(destination['distance'] as double? ?? 0).toStringAsFixed(1)} km',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[600],
+                      if (destination['distance'] != null)
+                        Text(
+                          '${(destination['distance'] as double).toStringAsFixed(1)} km',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green[600],
+                          ),
                         ),
-                      ),
                       if (destination['rating'] != null)
                         Text(
                           '⭐ ${destination['rating']}',
@@ -1044,14 +1157,15 @@ class _CampingMapPageState extends State<CampingMapPage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '${(shop['distance'] as double? ?? 0).toStringAsFixed(1)} km',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[600],
+                      if (shop['distance'] != null)
+                        Text(
+                          '${(shop['distance'] as double).toStringAsFixed(1)} km',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green[600],
+                          ),
                         ),
-                      ),
                       if (shop['rating'] != null)
                         Text(
                           '⭐ ${shop['rating']}',
@@ -1076,6 +1190,24 @@ class _CampingMapPageState extends State<CampingMapPage>
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              
+              if (shop['priceRange'] != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.monetization_on, size: 14, color: Colors.green[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      shop['priceRange'],
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.green[600],
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -1253,8 +1385,8 @@ class _CampingMapPageState extends State<CampingMapPage>
             Slider(
               value: _radiusKm,
               min: 10,
-              max: 100,
-              divisions: 9,
+              max: 200,
+              divisions: 19,
               label: '${_radiusKm.toInt()} km',
               onChanged: (value) {
                 setState(() {

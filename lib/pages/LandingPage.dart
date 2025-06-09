@@ -27,16 +27,8 @@ class _LandingPageState extends State<LandingPage>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   
-  // Categories for filtering
-  final List<String> _categories = [
-    'Semua',
-    'Tenda',
-    'Sleeping Bag',
-    'Kompor',
-    'Carrier',
-    'Peralatan Masak',
-    'Lampu'
-  ];
+  // FIXED: Dynamic categories from data
+  List<String> _categories = ['Semua'];
 
   @override
   void initState() {
@@ -71,6 +63,9 @@ class _LandingPageState extends State<LandingPage>
 
       final peralatanList = await ApiService.fetchPeralatan();
       
+      // FIXED: Extract dynamic categories from data
+      _extractCategoriesFromData(peralatanList);
+      
       setState(() {
         _allPeralatan = peralatanList;
         _filteredPeralatan = peralatanList;
@@ -84,6 +79,17 @@ class _LandingPageState extends State<LandingPage>
     }
   }
 
+  // FIXED: Extract categories dynamically from data
+  void _extractCategoriesFromData(List<Peralatan> peralatanList) {
+    Set<String> categoriesSet = {'Semua'};
+    for (var peralatan in peralatanList) {
+      if (peralatan.kategori.isNotEmpty) {
+        categoriesSet.add(peralatan.kategori);
+      }
+    }
+    _categories = categoriesSet.toList();
+  }
+
   void _filterPeralatan() {
     setState(() {
       _filteredPeralatan = _allPeralatan.where((peralatan) {
@@ -94,7 +100,6 @@ class _LandingPageState extends State<LandingPage>
             .toLowerCase()
             .contains(_searchController.text.toLowerCase());
         
-        // FIXED: Proper category filtering
         final matchesCategory = _selectedCategory == 'Semua' ||
             peralatan.kategori.toLowerCase() == _selectedCategory.toLowerCase();
         
@@ -141,7 +146,7 @@ class _LandingPageState extends State<LandingPage>
         style: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
           fontSize: 24,
-          color: Colors.white, // FIXED: Ensure white text
+          color: Colors.white,
         ),
       ),
       backgroundColor: Colors.teal[800],
@@ -200,27 +205,45 @@ class _LandingPageState extends State<LandingPage>
               child: _buildEmptyWidget(),
             )
           else
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.75,
+            // FIXED: Responsive grid with better card layout
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _buildPeralatanCard(_filteredPeralatan[index]),
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    return _buildPeralatanCard(_filteredPeralatan[index]);
-                  },
-                  childCount: _filteredPeralatan.length,
-                ),
+                childCount: _filteredPeralatan.length,
               ),
             ),
+          ),
+
+
         ],
       ),
     );
   }
+
+  // FIXED: Better responsive grid calculations
+  int _getGridCrossAxisCount(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth < 600) {
+      return 2; // Mobile
+    } else if (screenWidth < 1000) {
+      return 3; // Tablet
+    } else {
+      return 4; // Desktop
+    }
+  }
+
+double _getGridAspectRatio(BuildContext context) {
+  final w = MediaQuery.of(context).size.width;
+  if (w < 600) return 0.75;    // mobile: lebih tinggi
+  if (w < 1000) return 0.80;   // tablet
+  return 0.85;                  // desktop
+}
+
 
   Widget _buildSearchSection() {
     return Container(
@@ -248,7 +271,7 @@ class _LandingPageState extends State<LandingPage>
             controller: _searchController,
             onChanged: (_) => _onSearchChanged(),
             style: GoogleFonts.poppins(
-              color: Colors.black87, // FIXED: Dark text for readability
+              color: Colors.black87,
               fontSize: 14,
             ),
             decoration: InputDecoration(
@@ -300,7 +323,7 @@ class _LandingPageState extends State<LandingPage>
               ),
               selected: isSelected,
               onSelected: (_) => _onCategoryChanged(category),
-              backgroundColor: Colors.white, // FIXED: Light background
+              backgroundColor: Colors.white,
               selectedColor: Colors.teal[600],
               checkmarkColor: Colors.white,
               elevation: isSelected ? 4 : 1,
@@ -316,171 +339,177 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _buildPeralatanCard(Peralatan peralatan) {
-    return Card(
-      elevation: 3, // FIXED: Reduced elevation for lighter appearance
-      shadowColor: Colors.black12, // FIXED: Lighter shadow
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: Colors.white, // FIXED: Ensure white background
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => RentDetailPage(peralatan: peralatan),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
+Widget _buildPeralatanCard(Peralatan peralatan) {
+  return Card(
+    elevation: 4,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+    ),
+    clipBehavior: Clip.hardEdge,
+    child: InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RentDetailPage(peralatan: peralatan),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity, // biar full parent
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image
-            Expanded(
-              flex: 3,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
-                  image: DecorationImage(
-                    image: NetworkImage(peralatan.image),
-                    fit: BoxFit.cover,
-                    onError: (exception, stackTrace) {},
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    // Fallback for broken images
-                    if (peralatan.image.isEmpty)
-                      Container(
-                        color: Colors.grey[200], // FIXED: Lighter placeholder
-                        child: Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            color: Colors.grey[400],
-                            size: 32,
-                          ),
-                        ),
+            AspectRatio(
+              aspectRatio: 4/2, // 2:1, lebih lebar & cocok di list
+              child: peralatan.image.isNotEmpty
+                  ? Image.network(
+                      peralatan.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.image_not_supported, size: 40),
                       ),
-                    
-                    // Favorite button
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: _buildFavoriteButton(peralatan),
+                    )
+                  : Container(
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported, size: 40),
+                      ),
                     ),
-                    
-                    // Stock indicator
-                    if (peralatan.stok == 0)
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red[600],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'Habis',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
             ),
-            
-            // Content
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      peralatan.nama,
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.grey[800], // FIXED: Dark readable text
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nama peralatan
+                  Text(
+                    peralatan.nama,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  // Kategori
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.teal[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.teal[200]!,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
                       peralatan.kategori,
                       style: GoogleFonts.poppins(
-                        color: Colors.grey[600],
                         fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.teal[700],
                       ),
                     ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Rp ${peralatan.harga.toString()}/hari',
-                            style: GoogleFonts.poppins(
-                              color: Colors.teal[700],
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Harga dan stok
+                  Row(
+                    children: [
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Rp ${_formatCurrency(peralatan.harga)}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal[700],
+                                ),
+                              ),
+                              TextSpan(
+                                text: '/hari',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: peralatan.stok > 0
+                              ? Colors.green[50]
+                              : Colors.red[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: peralatan.stok > 0
+                                ? Colors.green[200]!
+                                : Colors.red[200]!,
+                            width: 1,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: peralatan.stok > 0 
-                                ? Colors.green[50] // FIXED: Lighter background
-                                : Colors.red[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: peralatan.stok > 0 
-                                  ? Colors.green[200]!
-                                  : Colors.red[200]!,
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            'Stok: ${peralatan.stok}',
-                            style: GoogleFonts.poppins(
-                              color: peralatan.stok > 0 
-                                  ? Colors.green[700] 
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              peralatan.stok > 0
+                                  ? Icons.inventory_2_outlined
+                                  : Icons.remove_shopping_cart_outlined,
+                              size: 14,
+                              color: peralatan.stok > 0
+                                  ? Colors.green[700]
                                   : Colors.red[700],
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${peralatan.stok}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: peralatan.stok > 0
+                                    ? Colors.green[700]
+                                    : Colors.red[700],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
+    ),
+  );
+}
+
+
+
+
+  // FIXED: Currency formatting helper
+  String _formatCurrency(int amount) {
+    return amount.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
     );
   }
 
@@ -494,9 +523,8 @@ class _LandingPageState extends State<LandingPage>
           onTap: () async {
             if (UserService.isUserLoggedIn()) {
               await FavoriteService.toggleFavorite(peralatan);
-              setState(() {}); // Refresh to update favorite status
+              setState(() {});
             } else {
-              // Show login prompt
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
@@ -519,14 +547,14 @@ class _LandingPageState extends State<LandingPage>
             }
           },
           child: Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.95), // FIXED: More opaque background
+              color: Colors.white.withOpacity(0.9),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -560,7 +588,7 @@ class _LandingPageState extends State<LandingPage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700], // FIXED: Readable color
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 8),
@@ -609,7 +637,7 @@ class _LandingPageState extends State<LandingPage>
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[700], // FIXED: Readable color
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 8),

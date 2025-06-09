@@ -1,4 +1,3 @@
-// FIXED: Calendar input bug - RentDetailPage.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/Peralatan.dart';
@@ -19,8 +18,7 @@ class RentDetailPage extends StatefulWidget {
   State<RentDetailPage> createState() => _RentDetailPageState();
 }
 
-class _RentDetailPageState extends State<RentDetailPage>
-    with TickerProviderStateMixin {
+class _RentDetailPageState extends State<RentDetailPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
@@ -47,7 +45,6 @@ class _RentDetailPageState extends State<RentDetailPage>
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
@@ -55,7 +52,6 @@ class _RentDetailPageState extends State<RentDetailPage>
       parent: _slideController,
       curve: Curves.easeOutCubic,
     ));
-
     _slideController.forward();
   }
 
@@ -77,17 +73,9 @@ class _RentDetailPageState extends State<RentDetailPage>
     }
   }
 
-  int get _rentalDays {
-    return _endDate.difference(_startDate).inDays;
-  }
-
-  double get _totalPrice {
-    return _quantity * _rentalDays * widget.peralatan.harga.toDouble();
-  }
-
-  double get _minimumDP {
-    return _totalPrice * 0.5;
-  }
+  int get _rentalDays => _endDate.difference(_startDate).inDays;
+  double get _totalPrice => _quantity * _rentalDays * widget.peralatan.harga.toDouble();
+  double get _minimumDP => _totalPrice * 0.5;
 
   void _updateQuantity(String value) {
     final quantity = int.tryParse(value) ?? 0;
@@ -103,13 +91,11 @@ class _RentDetailPageState extends State<RentDetailPage>
       _showLoginPrompt();
       return;
     }
-
     try {
       await FavoriteService.toggleFavorite(widget.peralatan);
       setState(() {
         _isFavorite = !_isFavorite;
       });
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -154,9 +140,7 @@ class _RentDetailPageState extends State<RentDetailPage>
       _showLoginPrompt();
       return;
     }
-
     if (!_formKey.currentState!.validate()) return;
-
     if (_quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -169,7 +153,6 @@ class _RentDetailPageState extends State<RentDetailPage>
       );
       return;
     }
-
     if (widget.peralatan.stok < _quantity) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -182,7 +165,6 @@ class _RentDetailPageState extends State<RentDetailPage>
       );
       return;
     }
-
     if (_rentalDays <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -195,11 +177,7 @@ class _RentDetailPageState extends State<RentDetailPage>
       );
       return;
     }
-
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() { _isLoading = true; });
     try {
       final rentalId = await RentService.createRental(
         peralatanId: widget.peralatan.id,
@@ -211,19 +189,13 @@ class _RentDetailPageState extends State<RentDetailPage>
         endDate: _endDate,
         userPhone: _phoneController.text.trim(),
       );
-
       if (rentalId != null) {
-        if (mounted) {
-          _showSuccessDialog(rentalId);
-        }
+        if (mounted) _showSuccessDialog(rentalId);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Gagal membuat rental. Silakan coba lagi.',
-                style: GoogleFonts.poppins(),
-              ),
+              content: Text('Gagal membuat rental. Silakan coba lagi.', style: GoogleFonts.poppins(),),
               backgroundColor: Colors.red,
             ),
           );
@@ -233,20 +205,13 @@ class _RentDetailPageState extends State<RentDetailPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Error: $e',
-              style: GoogleFonts.poppins(),
-            ),
+            content: Text('Error: $e', style: GoogleFonts.poppins(),),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
@@ -312,10 +277,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Batal',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                    ),
+                    child: Text('Batal', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -325,9 +287,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginPage(),
-                        ),
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -338,10 +298,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Login',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                    ),
+                    child: Text('Login', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -365,20 +322,14 @@ class _RentDetailPageState extends State<RentDetailPage>
           children: [
             Icon(Icons.check_circle, color: Colors.green[600]),
             const SizedBox(width: 8),
-            Text(
-              'Rental Berhasil',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-            ),
+            Text('Rental Berhasil', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Rental Anda telah berhasil dibuat dengan ID: $rentalId',
-              style: GoogleFonts.poppins(),
-            ),
+            Text('Rental Anda telah berhasil dibuat dengan ID: $rentalId', style: GoogleFonts.poppins()),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -390,21 +341,10 @@ class _RentDetailPageState extends State<RentDetailPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '💰 Info Pembayaran',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange[700],
-                    ),
-                  ),
+                  Text('💰 Info Pembayaran', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.orange[700])),
                   const SizedBox(height: 4),
-                  Text(
-                    'Anda dapat membayar DP (50%) atau langsung lunas. Silakan cek menu "Sewa" untuk melakukan pembayaran.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.orange[700],
-                    ),
-                  ),
+                  Text('Anda dapat membayar DP (50%) atau langsung lunas. Silakan cek menu "Sewa" untuk melakukan pembayaran.',
+                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.orange[700])),
                 ],
               ),
             ),
@@ -413,504 +353,399 @@ class _RentDetailPageState extends State<RentDetailPage>
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Back to previous page
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
-            child: Text(
-              'OK',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.teal[600],
-              ),
-            ),
+            child: Text('OK', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.teal[600])),
           ),
         ],
       ),
     );
   }
 
+  // ---- FIXED: BOTTOM SHEET RENTAL FORM DENGAN STATEFULBUILDER ----
   void _showRentalForm() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => SlideTransition(
-        position: _slideAnimation,
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.teal[50],
-                  borderRadius: const BorderRadius.only(
+      builder: (context) {
+        // Temporary copy untuk date & quantity agar realtime di modal
+        DateTime startDate = _startDate;
+        DateTime endDate = _endDate;
+        int quantity = _quantity;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            int rentalDays = endDate.difference(startDate).inDays;
+            double totalPrice = quantity * rentalDays * widget.peralatan.harga.toDouble();
+            double minDP = totalPrice * 0.5;
+
+            return SlideTransition(
+              position: _slideAnimation,
+              child: Container(
+                height: MediaQuery.of(context).size.height * 0.85,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(24),
                     topRight: Radius.circular(24),
                   ),
                 ),
                 child: Column(
                   children: [
+                    // HEADER
                     Container(
-                      width: 40,
-                      height: 4,
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
+                        color: Colors.teal[50],
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(24),
+                          topRight: Radius.circular(24),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Sewa ${widget.peralatan.nama}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Sewa ${widget.peralatan.nama}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
+
+                    // FORM
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Quantity Input
+                              _buildSectionTitle('Jumlah Peralatan'),
+                              TextFormField(
+                                controller: _quantityController,
+                                keyboardType: TextInputType.number,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.black87,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Masukkan jumlah peralatan',
+                                  hintStyle: GoogleFonts.poppins(
+                                    color: Colors.grey[400],
+                                    fontSize: 14,
+                                  ),
+                                  prefixIcon: Icon(Icons.add_shopping_cart, color: Colors.teal[600]),
+                                  suffixText: 'unit',
+                                  suffixStyle: GoogleFonts.poppins(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.teal[600]!,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: Colors.red[400]!),
+                                  ),
+                                  fillColor: Colors.grey[50],
+                                  filled: true,
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Jumlah peralatan diperlukan';
+                                  }
+                                  final qty = int.tryParse(value.trim());
+                                  if (qty == null) return 'Masukkan angka yang valid';
+                                  if (qty <= 0) return 'Jumlah harus lebih dari 0';
+                                  if (qty > widget.peralatan.stok) return 'Melebihi stok tersedia (${widget.peralatan.stok})';
+                                  return null;
+                                },
+                                onChanged: (value) {
+                                  final qty = int.tryParse(value) ?? 1;
+                                  setModalState(() {
+                                    quantity = qty;
+                                  });
+                                  setState(() {
+                                    _quantity = qty;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Stok tersedia: ${widget.peralatan.stok} unit',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // DATE PICKER DENGAN STATEFULBUILDER
+                              _buildSectionTitle('Periode Sewa'),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.grey[50],
+                                ),
+                                child: Column(
+                                  children: [
+                                    // Start Date
+                                    InkWell(
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: startDate,
+                                          firstDate: DateTime.now(),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        );
+                                        if (picked != null && picked != startDate) {
+                                          setModalState(() { startDate = picked; });
+                                          setState(() { _startDate = picked; });
+                                          // Ensure end date > start date
+                                          if (endDate.isBefore(picked.add(const Duration(days: 1)))) {
+                                            setModalState(() { endDate = picked.add(const Duration(days: 1)); });
+                                            setState(() { _endDate = picked.add(const Duration(days: 1)); });
+                                          }
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.grey[200]!),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.calendar_today, color: Colors.teal[600], size: 20),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text('Tanggal Mulai', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                                                  const SizedBox(height: 4),
+                                                  Text(_formatDateLong(startDate), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[800], fontSize: 14)),
+                                                ],
+                                              ),
+                                            ),
+                                            Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // End Date
+                                    InkWell(
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: endDate,
+                                          firstDate: startDate.add(const Duration(days: 1)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        );
+                                        if (picked != null && picked != endDate) {
+                                          setModalState(() { endDate = picked; });
+                                          setState(() { _endDate = picked; });
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.grey[200]!),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.event, color: Colors.teal[600], size: 20),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text('Tanggal Selesai', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                                                  const SizedBox(height: 4),
+                                                  Text(_formatDateLong(endDate), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[800], fontSize: 14)),
+                                                ],
+                                              ),
+                                            ),
+                                            Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Durasi
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue[200]!),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.access_time, color: Colors.blue[600], size: 20),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Durasi sewa: $rentalDays hari',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.blue[700],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Phone Number
+                              _buildSectionTitle('Nomor Telepon'),
+                              TextFormField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.black87,
+                                  fontSize: 16,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Masukkan nomor telepon',
+                                  hintStyle: GoogleFonts.poppins(
+                                    color: Colors.grey[400],
+                                    fontSize: 14,
+                                  ),
+                                  prefixIcon: Icon(Icons.phone, color: Colors.teal[600]),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.teal[600]!,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: Colors.red[400]!),
+                                  ),
+                                  fillColor: Colors.grey[50],
+                                  filled: true,
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Nomor telepon diperlukan';
+                                  }
+                                  if (value.trim().length < 10) {
+                                    return 'Nomor telepon minimal 10 digit';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Price Summary
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.teal[200]!),
+                                ),
+                                child: Column(
+                                  children: [
+                                    _buildPriceRow('Harga per hari', 'Rp ${widget.peralatan.harga.toString()}'),
+                                    _buildPriceRow('Jumlah', '$quantity unit'),
+                                    _buildPriceRow('Durasi', '$rentalDays hari'),
+                                    const Divider(color: Colors.teal),
+                                    _buildPriceRow('Total Harga', 'Rp ${totalPrice.toStringAsFixed(0)}', isTotal: true),
+                                    _buildPriceRow('Minimum DP (50%)', 'Rp ${minDP.toStringAsFixed(0)}', isSubtext: true),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      textAlign: TextAlign.center,
+                    ),
+
+                    // BUTTON
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : () {
+                            // Sync all value ke parent sebelum submit
+                            setState(() {
+                              _startDate = startDate;
+                              _endDate = endDate;
+                              _quantity = quantity;
+                            });
+                            _submitRental();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal[600],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                )
+                              : Text('Sewa Sekarang', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              
-              // Form Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Quantity Input
-                        _buildSectionTitle('Jumlah Peralatan'),
-                        TextFormField(
-                          controller: _quantityController,
-                          keyboardType: TextInputType.number,
-                          style: GoogleFonts.poppins(
-                            color: Colors.black87,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Masukkan jumlah peralatan',
-                            hintStyle: GoogleFonts.poppins(
-                              color: Colors.grey[400],
-                              fontSize: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.add_shopping_cart,
-                              color: Colors.teal[600],
-                            ),
-                            suffixText: 'unit',
-                            suffixStyle: GoogleFonts.poppins(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.teal[600]!,
-                                width: 2,
-                              ),
-                            ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.red[400]!),
-                            ),
-                            fillColor: Colors.grey[50],
-                            filled: true,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Jumlah peralatan diperlukan';
-                            }
-                            final quantity = int.tryParse(value.trim());
-                            if (quantity == null) {
-                              return 'Masukkan angka yang valid';
-                            }
-                            if (quantity <= 0) {
-                              return 'Jumlah harus lebih dari 0';
-                            }
-                            if (quantity > widget.peralatan.stok) {
-                              return 'Melebihi stok tersedia (${widget.peralatan.stok})';
-                            }
-                            return null;
-                          },
-                          onChanged: (value) {
-                            _updateQuantity(value);
-                          },
-                        ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        Text(
-                          'Stok tersedia: ${widget.peralatan.stok} unit',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // FIXED: Date Selection with proper state management
-                        _buildSectionTitle('Periode Sewa'),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _selectStartDate(),
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.grey[50],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.calendar_today,
-                                            color: Colors.teal[600],
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Tanggal Mulai',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _formatDate(_startDate),
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[800],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(Icons.arrow_forward, color: Colors.grey[400]),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _selectEndDate(),
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.grey[50],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.event,
-                                            color: Colors.teal[600],
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Tanggal Selesai',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _formatDate(_endDate),
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[800],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // Show calculated duration
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue[200]!),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.access_time, color: Colors.blue[600], size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Durasi sewa: $_rentalDays hari',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Phone Number
-                        _buildSectionTitle('Nomor Telepon'),
-                        TextFormField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          style: GoogleFonts.poppins(
-                            color: Colors.black87,
-                            fontSize: 16,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Masukkan nomor telepon',
-                            hintStyle: GoogleFonts.poppins(
-                              color: Colors.grey[400],
-                              fontSize: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.phone,
-                              color: Colors.teal[600],
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.teal[600]!,
-                                width: 2,
-                              ),
-                            ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.red[400]!),
-                            ),
-                            fillColor: Colors.grey[50],
-                            filled: true,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Nomor telepon diperlukan';
-                            }
-                            if (value.trim().length < 10) {
-                              return 'Nomor telepon minimal 10 digit';
-                            }
-                            return null;
-                          },
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Price Summary
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.teal[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.teal[200]!),
-                          ),
-                          child: Column(
-                            children: [
-                              _buildPriceRow(
-                                'Harga per hari',
-                                'Rp ${widget.peralatan.harga.toString()}',
-                              ),
-                              _buildPriceRow(
-                                'Jumlah',
-                                '$_quantity unit',
-                              ),
-                              _buildPriceRow(
-                                'Durasi',
-                                '$_rentalDays hari',
-                              ),
-                              const Divider(color: Colors.teal),
-                              _buildPriceRow(
-                                'Total Harga',
-                                'Rp ${_totalPrice.toStringAsFixed(0)}',
-                                isTotal: true,
-                              ),
-                              _buildPriceRow(
-                                'Minimum DP (50%)',
-                                'Rp ${_minimumDP.toStringAsFixed(0)}',
-                                isSubtext: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Submit Button
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _submitRental,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal[600],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          )
-                        : Text(
-                            'Sewa Sekarang',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // FIXED: Date picker functions with proper state management
-  Future<void> _selectStartDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.teal[600]!,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black87,
-            ),
-          ),
-          child: child!,
+            );
+          },
         );
       },
     );
-    
-    if (picked != null && picked != _startDate) {
-      setState(() {
-        _startDate = picked;
-        // FIXED: Ensure end date is at least one day after start date
-        if (_endDate.isBefore(picked.add(const Duration(days: 1))) || 
-            _endDate.isAtSameMomentAs(picked)) {
-          _endDate = picked.add(const Duration(days: 1));
-        }
-      });
-      
-      // FIXED: Show feedback to user about date change
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Tanggal mulai diubah ke ${_formatDate(picked)}',
-              style: GoogleFonts.poppins(),
-            ),
-            duration: const Duration(seconds: 2),
-            backgroundColor: Colors.teal[600],
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _selectEndDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate,
-      firstDate: _startDate.add(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.teal[600]!,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black87,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    
-    if (picked != null && picked != _endDate) {
-      setState(() {
-        _endDate = picked;
-      });
-      
-      // FIXED: Show feedback to user about date change
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Tanggal selesai diubah ke ${_formatDate(picked)}',
-              style: GoogleFonts.poppins(),
-            ),
-            duration: const Duration(seconds: 2),
-            backgroundColor: Colors.teal[600],
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildSectionTitle(String title) {
@@ -954,13 +789,15 @@ class _RentDetailPageState extends State<RentDetailPage>
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDateLong(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
-    
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+    const days = [
+      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+    ];
+    return '${days[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   @override
@@ -1028,7 +865,6 @@ class _RentDetailPageState extends State<RentDetailPage>
               ),
             ],
           ),
-          
           // Content
           SliverToBoxAdapter(
             child: Column(
@@ -1049,16 +885,11 @@ class _RentDetailPageState extends State<RentDetailPage>
                           color: Colors.grey[800],
                         ),
                       ),
-                      
                       const SizedBox(height: 8),
-                      
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.teal[100],
                               borderRadius: BorderRadius.circular(6),
@@ -1074,14 +905,9 @@ class _RentDetailPageState extends State<RentDetailPage>
                           ),
                           const SizedBox(width: 12),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: widget.peralatan.stok > 0 
-                                  ? Colors.green[100] 
-                                  : Colors.red[100],
+                              color: widget.peralatan.stok > 0 ? Colors.green[100] : Colors.red[100],
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -1089,17 +915,13 @@ class _RentDetailPageState extends State<RentDetailPage>
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: widget.peralatan.stok > 0 
-                                    ? Colors.green[700] 
-                                    : Colors.red[700],
+                                color: widget.peralatan.stok > 0 ? Colors.green[700] : Colors.red[700],
                               ),
                             ),
                           ),
                         ],
                       ),
-                      
                       const SizedBox(height: 16),
-                      
                       Text(
                         'Rp ${widget.peralatan.harga.toString()}/hari',
                         style: GoogleFonts.poppins(
@@ -1111,9 +933,7 @@ class _RentDetailPageState extends State<RentDetailPage>
                     ],
                   ),
                 ),
-                
                 const SizedBox(height: 16),
-                
                 // Details Section
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -1140,15 +960,11 @@ class _RentDetailPageState extends State<RentDetailPage>
                           color: Colors.grey[800],
                         ),
                       ),
-                      
                       const SizedBox(height: 12),
-                      
                       _buildDetailRow('Kapasitas', '${widget.peralatan.kapasitas} orang'),
                       _buildDetailRow('Lokasi', widget.peralatan.lokasi),
                       _buildDetailRow('Tahun Beli', widget.peralatan.tahunDibeli.toString()),
-                      
                       const SizedBox(height: 16),
-                      
                       Text(
                         'Deskripsi',
                         style: GoogleFonts.poppins(
@@ -1157,12 +973,10 @@ class _RentDetailPageState extends State<RentDetailPage>
                           color: Colors.grey[800],
                         ),
                       ),
-                      
                       const SizedBox(height: 8),
-                      
                       Text(
-                        widget.peralatan.deskripsi.isNotEmpty 
-                            ? widget.peralatan.deskripsi 
+                        widget.peralatan.deskripsi.isNotEmpty
+                            ? widget.peralatan.deskripsi
                             : 'Tidak ada deskripsi tersedia.',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
@@ -1173,14 +987,12 @@ class _RentDetailPageState extends State<RentDetailPage>
                     ],
                   ),
                 ),
-                
                 const SizedBox(height: 100), // Space for floating button
               ],
             ),
           ),
         ],
       ),
-      
       // Floating Action Button
       floatingActionButton: widget.peralatan.stok > 0
           ? FloatingActionButton.extended(

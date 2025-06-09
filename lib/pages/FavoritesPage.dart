@@ -78,7 +78,6 @@ class _FavoritePageState extends State<FavoritePage>
 
   Future<void> _removeFromFavorites(String peralatanId) async {
     try {
-      // Find the item to create Peralatan object
       final item = _favoriteItems.firstWhere(
         (item) => item['id'] == peralatanId,
         orElse: () => {},
@@ -88,7 +87,6 @@ class _FavoritePageState extends State<FavoritePage>
         final peralatan = Peralatan.fromJson(item);
         await FavoriteService.removeFromFavorites(peralatan);
         
-        // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -111,7 +109,6 @@ class _FavoritePageState extends State<FavoritePage>
           );
         }
         
-        // Reload favorites
         await _loadFavorites();
       }
     } catch (e) {
@@ -140,11 +137,13 @@ class _FavoritePageState extends State<FavoritePage>
           children: [
             Icon(Icons.favorite_border, color: Colors.red[600]),
             const SizedBox(width: 8),
-            Text(
-              'Hapus Favorit',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800], // FIXED: Dark readable text
+            Flexible(
+              child: Text(
+                'Hapus Favorit',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
               ),
             ),
           ],
@@ -152,7 +151,7 @@ class _FavoritePageState extends State<FavoritePage>
         content: Text(
           'Apakah Anda yakin ingin menghapus "$peralatanNama" dari favorit?',
           style: GoogleFonts.poppins(
-            color: Colors.grey[700], // FIXED: Dark readable text
+            color: Colors.grey[700],
           ),
         ),
         actions: [
@@ -214,7 +213,7 @@ class _FavoritePageState extends State<FavoritePage>
         style: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
           fontSize: 20,
-          color: Colors.white, // FIXED: Ensure white text
+          color: Colors.white,
         ),
       ),
       backgroundColor: Colors.teal[800],
@@ -280,7 +279,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700], // FIXED: Readable color
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 12),
@@ -343,7 +342,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700], // FIXED: Readable color
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 8),
@@ -392,7 +391,7 @@ class _FavoritePageState extends State<FavoritePage>
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700], // FIXED: Readable color
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 12),
@@ -438,163 +437,332 @@ class _FavoritePageState extends State<FavoritePage>
   }
 
   Widget _buildFavoriteCard(Map<String, dynamic> item) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 3, // FIXED: Reduced elevation
-      shadowColor: Colors.black12, // FIXED: Lighter shadow
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: Colors.white, // FIXED: Ensure white background
-      child: InkWell(
-        onTap: () {
-          try {
-            final peralatan = Peralatan.fromJson(item);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => RentDetailPage(peralatan: peralatan),
-              ),
-            );
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Gagal membuka detail: $e',
-                  style: GoogleFonts.poppins(),
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Image
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  image: item['image'] != null && item['image'].isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(item['image']),
-                          fit: BoxFit.cover,
-                          onError: (exception, stackTrace) {},
-                        )
-                      : null,
-                  color: Colors.grey[200], // FIXED: Lighter placeholder color
-                ),
-                child: item['image'] == null || item['image'].isEmpty
-                    ? Icon(
-                        Icons.image_not_supported,
-                        color: Colors.grey[400], // FIXED: Lighter icon color
-                        size: 32,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 600;
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 3,
+          shadowColor: Colors.black12,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          color: Colors.white,
+          child: InkWell(
+            onTap: () {
+              try {
+                final peralatan = Peralatan.fromJson(item);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RentDetailPage(peralatan: peralatan),
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Gagal membuka detail: $e',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: isSmallScreen 
+                  ? _buildSmallScreenLayout(item, constraints)
+                  : _buildLargeScreenLayout(item, constraints),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // FIXED: Layout for small screens (mobile)
+  Widget _buildSmallScreenLayout(Map<String, dynamic> item, BoxConstraints constraints) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Image and remove button row
+        Row(
+          children: [
+            // Image
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: item['image'] != null && item['image'].isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(item['image']),
+                        fit: BoxFit.cover,
+                        onError: (exception, stackTrace) {},
                       )
                     : null,
+                color: Colors.grey[200],
               ),
-              
-              const SizedBox(width: 16),
-              
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['nama'] ?? 'Nama tidak tersedia',
+              child: item['image'] == null || item['image'].isEmpty
+                  ? Icon(
+                      Icons.image_not_supported,
+                      color: Colors.grey[400],
+                      size: 32,
+                    )
+                  : null,
+            ),
+            
+            const SizedBox(width: 16),
+            
+            // Content - flexible to prevent overflow
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['nama'] ?? 'Nama tidak tersedia',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.grey[800],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item['kategori'] ?? 'Kategori tidak tersedia',
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(width: 8),
+            
+            // Remove button
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red[200]!, width: 1),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  _showRemoveConfirmation(
+                    item['id'] ?? '',
+                    item['nama'] ?? 'Item',
+                  );
+                },
+                icon: Icon(
+                  Icons.favorite,
+                  color: Colors.red[600],
+                ),
+                tooltip: 'Hapus dari favorit',
+              ),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Price and stock row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                'Rp ${_formatCurrency((item['harga'] ?? 0).toDouble())}/hari',
+                style: GoogleFonts.poppins(
+                  color: Colors.teal[700],
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: (item['stok'] ?? 0) > 0 
+                    ? Colors.green[50]
+                    : Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (item['stok'] ?? 0) > 0 
+                      ? Colors.green[200]!
+                      : Colors.red[200]!,
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'Stok: ${item['stok'] ?? 0}',
+                style: GoogleFonts.poppins(
+                  color: (item['stok'] ?? 0) > 0 
+                      ? Colors.green[700] 
+                      : Colors.red[700],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // FIXED: Layout for large screens (tablet/desktop)
+  Widget _buildLargeScreenLayout(Map<String, dynamic> item, BoxConstraints constraints) {
+    return Row(
+      children: [
+        // Image
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            image: item['image'] != null && item['image'].isNotEmpty
+                ? DecorationImage(
+                    image: NetworkImage(item['image']),
+                    fit: BoxFit.cover,
+                    onError: (exception, stackTrace) {},
+                  )
+                : null,
+            color: Colors.grey[200],
+          ),
+          child: item['image'] == null || item['image'].isEmpty
+              ? Icon(
+                  Icons.image_not_supported,
+                  color: Colors.grey[400],
+                  size: 40,
+                )
+              : null,
+        ),
+        
+        const SizedBox(width: 16),
+        
+        // Content - expanded to fill available space
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item['nama'] ?? 'Nama tidak tersedia',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: Colors.grey[800],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item['kategori'] ?? 'Kategori tidak tersedia',
+                style: GoogleFonts.poppins(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Rp ${_formatCurrency((item['harga'] ?? 0).toDouble())}/hari',
                       style: GoogleFonts.poppins(
+                        color: Colors.teal[700],
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
-                        color: Colors.grey[800], // FIXED: Dark readable text
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item['kategori'] ?? 'Kategori tidak tersedia',
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey[600],
-                        fontSize: 14,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (item['stok'] ?? 0) > 0 
+                          ? Colors.green[50]
+                          : Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: (item['stok'] ?? 0) > 0 
+                            ? Colors.green[200]!
+                            : Colors.red[200]!,
+                        width: 1,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          'Rp ${item['harga']?.toString() ?? '0'}/hari',
-                          style: GoogleFonts.poppins(
-                            color: Colors.teal[700],
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (item['stok'] ?? 0) > 0 
-                                ? Colors.green[50] // FIXED: Lighter background
-                                : Colors.red[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: (item['stok'] ?? 0) > 0 
-                                  ? Colors.green[200]!
-                                  : Colors.red[200]!,
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            'Stok: ${item['stok'] ?? 0}',
-                            style: GoogleFonts.poppins(
-                              color: (item['stok'] ?? 0) > 0 
-                                  ? Colors.green[700] 
-                                  : Colors.red[700],
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Stok: ${item['stok'] ?? 0}',
+                      style: GoogleFonts.poppins(
+                        color: (item['stok'] ?? 0) > 0 
+                            ? Colors.green[700] 
+                            : Colors.red[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(width: 8),
-              
-              // Remove button
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.red[50], // FIXED: Light background
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[200]!, width: 1),
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    _showRemoveConfirmation(
-                      item['id'] ?? '',
-                      item['nama'] ?? 'Item',
-                    );
-                  },
-                  icon: Icon(
-                    Icons.favorite,
-                    color: Colors.red[600],
                   ),
-                  tooltip: 'Hapus dari favorit',
-                ),
+                ],
               ),
             ],
           ),
         ),
-      ),
+        
+        const SizedBox(width: 8),
+        
+        // Remove button
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.red[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red[200]!, width: 1),
+          ),
+          child: IconButton(
+            onPressed: () {
+              _showRemoveConfirmation(
+                item['id'] ?? '',
+                item['nama'] ?? 'Item',
+              );
+            },
+            icon: Icon(
+              Icons.favorite,
+              color: Colors.red[600],
+            ),
+            tooltip: 'Hapus dari favorit',
+          ),
+        ),
+      ],
+    );
+  }
+
+  // FIXED: Currency formatting helper
+  String _formatCurrency(double amount) {
+    return amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
     );
   }
 }

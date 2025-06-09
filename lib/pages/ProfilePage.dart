@@ -1,12 +1,13 @@
-// UPDATED: ProfilePage with Map Integration
+// IMPROVED: ProfilePage.dart - Real Location & Better UX
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:io';
 import '../services/UserService.dart';
 import '../services/RentService.dart';
 import '../services/NotificationService.dart';
-import '../services/LocationService.dart'; // FIXED: Add LocationService
+import '../services/LocationService.dart';
 import '../models/user.dart';
 import '../components/bottomNav.dart';
 import 'LoginPage.dart';
@@ -18,7 +19,7 @@ import 'CurrencyConverterPage.dart' as currencyConverter;
 import 'TimeConverterPage.dart';
 import 'SuggestionPage.dart';
 import 'SensorPage.dart';
-import 'CampingMapPage.dart'; // FIXED: Add CampingMapPage
+import 'CampingMapPage.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -34,6 +35,7 @@ class _ProfilePageState extends State<ProfilePage>
   bool _isLoading = true;
   String? _currentLocation;
   bool _locationLoading = false;
+  List<Map<String, dynamic>> _nearbySpots = [];
   
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -43,7 +45,7 @@ class _ProfilePageState extends State<ProfilePage>
     super.initState();
     _initializeAnimations();
     _loadUserData();
-    _getCurrentLocation();
+    _initializeLocation();
   }
 
   void _initializeAnimations() {
@@ -106,19 +108,86 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  Future<void> _getCurrentLocation() async {
+  /// IMPROVED: Initialize location using LocationService
+  Future<void> _initializeLocation() async {
     try {
       setState(() {
         _locationLoading = true;
       });
 
-      // Check location permission
+      // Initialize LocationService first
+      await LocationService.init();
+      
+      // Check if location is enabled
+      if (!LocationService.isLocationEnabled) {
+        setState(() {
+          _currentLocation = 'Layanan lokasi tidak aktif';
+          _locationLoading = false;
+        });
+        return;
+      }
+
+      // Get current location using LocationService
+      final position = await LocationService.getCurrentLocation();
+      
+      if (position != null) {
+        // Get formatted address from LocationService
+        final address = LocationService.currentAddress;
+        
+        setState(() {
+          _currentLocation = address ?? 'Lokasi terdeteksi: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+          _locationLoading = false;
+        });
+
+        // Load nearby camping spots
+        await _loadNearbyCampingSpots();
+      } else {
+        setState(() {
+          _currentLocation = 'Tidak dapat mendeteksi lokasi';
+          _locationLoading = false;
+        });
+      }
+
+    } catch (e) {
+      setState(() {
+        _currentLocation = 'Error: ${e.toString()}';
+        _locationLoading = false;
+      });
+      
+      print('❌ Error initializing location: $e');
+    }
+  }
+
+  /// Load nearby camping spots using LocationService
+  Future<void> _loadNearbyCampingSpots() async {
+    try {
+      final spots = await LocationService.findNearbyCampingSpots(radiusKm: 100.0);
+      
+      setState(() {
+        _nearbySpots = spots.take(6).toList(); // Show max 6 spots
+      });
+      
+      print('✅ Loaded ${_nearbySpots.length} nearby camping spots');
+    } catch (e) {
+      print('❌ Error loading nearby spots: $e');
+    }
+  }
+
+  /// IMPROVED: Refresh location with better error handling
+  Future<void> _refreshLocation() async {
+    try {
+      setState(() {
+        _locationLoading = true;
+      });
+
+      // Check location permission first
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
+          _showLocationPermissionDialog();
           setState(() {
-            _currentLocation = 'Lokasi tidak diizinkan';
+            _currentLocation = 'Izin lokasi ditolak';
             _locationLoading = false;
           });
           return;
@@ -126,6 +195,7 @@ class _ProfilePageState extends State<ProfilePage>
       }
 
       if (permission == LocationPermission.deniedForever) {
+        _showLocationSettingsDialog();
         setState(() {
           _currentLocation = 'Izin lokasi ditolak permanen';
           _locationLoading = false;
@@ -133,25 +203,171 @@ class _ProfilePageState extends State<ProfilePage>
         return;
       }
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      // Get fresh location
+      final position = await LocationService.getCurrentLocation();
+      
+      if (position != null) {
+        final address = LocationService.currentAddress;
+        
+        setState(() {
+          _currentLocation = address ?? 'Lokasi terdeteksi: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+          _locationLoading = false;
+        });
 
-      setState(() {
-        _currentLocation = 'Magelang, Jawa Tengah (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
-        _locationLoading = false;
-      });
+        // Refresh nearby spots
+        await _loadNearbyCampingSpots();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Lokasi berhasil diperbarui',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green[600],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _currentLocation = 'Gagal mendapatkan lokasi';
+          _locationLoading = false;
+        });
+      }
 
     } catch (e) {
       setState(() {
-        _currentLocation = 'Gagal mendapatkan lokasi';
+        _currentLocation = 'Error: ${e.toString()}';
         _locationLoading = false;
       });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal memperbarui lokasi: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  // FIXED: Navigate to camping map
+  /// Show dialog for location permission
+  void _showLocationPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.location_off, color: Colors.orange[600]),
+            const SizedBox(width: 8),
+            Text(
+              'Izin Lokasi',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Aplikasi memerlukan izin lokasi untuk menampilkan spot camping terdekat dan fitur navigasi.',
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Nanti',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _refreshLocation();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal[600],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Coba Lagi',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show dialog for location settings
+  void _showLocationSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.settings_outlined, color: Colors.red[600]),
+            const SizedBox(width: 8),
+            Text(
+              'Pengaturan Lokasi',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Izin lokasi telah ditolak permanen. Silakan aktifkan izin lokasi di pengaturan aplikasi untuk menggunakan fitur lokasi.',
+          style: GoogleFonts.poppins(
+            color: Colors.grey[700],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'OK',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.teal[600],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _navigateToCampingMap() async {
     try {
       // Check location permission first
@@ -159,29 +375,13 @@ class _ProfilePageState extends State<ProfilePage>
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Izin lokasi diperlukan untuk menggunakan peta',
-                style: GoogleFonts.poppins(),
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          _showLocationPermissionDialog();
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Silakan aktifkan izin lokasi di pengaturan untuk menggunakan peta',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showLocationSettingsDialog();
         return;
       }
 
@@ -205,13 +405,14 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  /// IMPROVED: Show nearby camping spots with real data
   void _findNearbyCampingSpots() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
+        height: MediaQuery.of(context).size.height * 0.75,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.only(
@@ -265,75 +466,99 @@ class _ProfilePageState extends State<ProfilePage>
             
             // Content
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  _buildCampingSpotCard(
-                    'Gunung Merbabu',
-                    '15 km dari lokasi Anda',
-                    'Basecamp New Selo',
-                    '⭐ 4.5 • 🌲 Hutan Pinus • 🏔️ 3.145 mdpl',
-                    Icons.terrain,
-                    Colors.green[600]!,
-                    -7.4550, 110.4403, // Sample coordinates
-                  ),
-                  _buildCampingSpotCard(
-                    'Umbul Ponggok',
-                    '12 km dari lokasi Anda',
-                    'Klaten, Jawa Tengah',
-                    '⭐ 4.3 • 🏊 Mata Air • 📸 Spot Foto',
-                    Icons.water,
-                    Colors.blue[600]!,
-                    -7.6517, 110.7222,
-                  ),
-                  _buildCampingSpotCard(
-                    'Kaliurang',
-                    '25 km dari lokasi Anda',
-                    'Sleman, DI Yogyakarta',
-                    '⭐ 4.4 • 🌋 Lereng Merapi • 🌡️ Sejuk',
-                    Icons.volcano,
-                    Colors.orange[600]!,
-                    -7.5954, 110.4189,
-                  ),
-                  _buildCampingSpotCard(
-                    'Ketep Pass',
-                    '8 km dari lokasi Anda',
-                    'Magelang, Jawa Tengah',
-                    '⭐ 4.6 • 🌅 Sunrise • 🔭 Observatory',
-                    Icons.landscape,
-                    Colors.purple[600]!,
-                    -7.4711, 110.3175,
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // FIXED: Button to open full map
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _navigateToCampingMap();
+              child: _nearbySpots.isEmpty
+                  ? _buildEmptyNearbySpots()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: _nearbySpots.length + 1, // +1 for button
+                      itemBuilder: (context, index) {
+                        if (index == _nearbySpots.length) {
+                          // Show "Open Full Map" button at the end
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 20),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _navigateToCampingMap();
+                                },
+                                icon: const Icon(Icons.map),
+                                label: Text(
+                                  'Buka Peta Lengkap & Navigasi',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal[600],
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final spot = _nearbySpots[index];
+                        return _buildRealCampingSpotCard(spot);
                       },
-                      icon: const Icon(Icons.map),
-                      label: Text(
-                        'Buka Peta Lengkap & Navigasi',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal[600],
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                     ),
-                  ),
-                ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build empty state for nearby spots
+  Widget _buildEmptyNearbySpots() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.location_searching,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Mencari Spot Camping...',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pastikan lokasi GPS aktif',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _refreshLocation,
+              icon: const Icon(Icons.refresh),
+              label: Text(
+                'Refresh Lokasi',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
@@ -342,7 +567,8 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildCampingSpotCard(String name, String distance, String location, String features, IconData icon, Color color, double lat, double lng) {
+  /// Build camping spot card with real data
+  Widget _buildRealCampingSpotCard(Map<String, dynamic> spot) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -351,13 +577,17 @@ class _ProfilePageState extends State<ProfilePage>
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: _getSpotColor(spot['type']).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: color, size: 24),
+          child: Icon(
+            _getSpotIcon(spot['type']),
+            color: _getSpotColor(spot['type']),
+            size: 24,
+          ),
         ),
         title: Text(
-          name,
+          spot['name'] ?? 'Destinasi',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             fontSize: 16,
@@ -368,7 +598,7 @@ class _ProfilePageState extends State<ProfilePage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              distance,
+              '${(spot['distance'] as double? ?? 0).toStringAsFixed(1)} km dari lokasi Anda',
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: Colors.green[600],
@@ -376,32 +606,83 @@ class _ProfilePageState extends State<ProfilePage>
               ),
             ),
             Text(
-              location,
+              spot['location'] ?? '',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: Colors.grey[600],
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              features,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[500],
-              ),
+            Row(
+              children: [
+                if (spot['rating'] != null) ...[
+                  Text(
+                    '⭐ ${spot['rating']}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.orange[600],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (spot['elevation'] != null)
+                  Text(
+                    '🏔️ ${spot['elevation']} mdpl',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
         trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
         onTap: () {
-          // FIXED: Quick navigation option
-          _showQuickNavigationDialog(name, lat, lng);
+          _showSpotDetailDialog(spot);
         },
       ),
     );
   }
 
-  void _showQuickNavigationDialog(String name, double lat, double lng) {
+  /// Get icon for spot type
+  IconData _getSpotIcon(String? type) {
+    switch (type?.toLowerCase()) {
+      case 'gunung':
+        return Icons.terrain;
+      case 'pantai':
+        return Icons.beach_access;
+      case 'hutan':
+        return Icons.forest;
+      case 'danau':
+        return Icons.water;
+      case 'perbukitan':
+        return Icons.landscape;
+      default:
+        return Icons.place;
+    }
+  }
+
+  /// Get color for spot type
+  Color _getSpotColor(String? type) {
+    switch (type?.toLowerCase()) {
+      case 'gunung':
+        return Colors.green[600]!;
+      case 'pantai':
+        return Colors.blue[600]!;
+      case 'hutan':
+        return Colors.green[800]!;
+      case 'danau':
+        return Colors.blue[400]!;
+      case 'perbukitan':
+        return Colors.orange[600]!;
+      default:
+        return Colors.grey[600]!;
+    }
+  }
+
+  /// Show spot detail dialog
+  void _showSpotDetailDialog(Map<String, dynamic> spot) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -410,11 +691,11 @@ class _ProfilePageState extends State<ProfilePage>
         ),
         title: Row(
           children: [
-            Icon(Icons.navigation, color: Colors.teal[600]),
+            Icon(_getSpotIcon(spot['type']), color: _getSpotColor(spot['type'])),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Navigasi ke $name',
+                spot['name'] ?? 'Destinasi',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
                   color: Colors.grey[800],
@@ -423,17 +704,73 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ],
         ),
-        content: Text(
-          'Pilih aplikasi untuk navigasi ke $name',
-          style: GoogleFonts.poppins(
-            color: Colors.grey[700],
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '📍 ${spot['location']}',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '📏 ${(spot['distance'] as double? ?? 0).toStringAsFixed(1)} km dari Anda',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.green[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (spot['description'] != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Deskripsi:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  spot['description'],
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+              if (spot['features'] != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Fitur:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  spot['features'],
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: Colors.blue[700],
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Batal',
+              'Tutup',
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w600,
                 color: Colors.grey[600],
@@ -643,7 +980,10 @@ class _ProfilePageState extends State<ProfilePage>
     }
 
     return RefreshIndicator(
-      onRefresh: _loadUserData,
+      onRefresh: () async {
+        await _loadUserData();
+        await _refreshLocation();
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -740,7 +1080,7 @@ class _ProfilePageState extends State<ProfilePage>
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // Profile Picture
+              // Profile Picture with proper file handling
               Container(
                 width: 100,
                 height: 100,
@@ -759,15 +1099,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ],
                 ),
                 child: ClipOval(
-                  child: _currentUser?.profileImage != null && _currentUser!.profileImage.isNotEmpty
-                      ? Image.network(
-                          _currentUser!.profileImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return _buildDefaultAvatar();
-                          },
-                        )
-                      : _buildDefaultAvatar(),
+                  child: _buildProfileImage(),
                 ),
               ),
               
@@ -822,8 +1154,36 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  // Profile image widget with proper file handling
+  Widget _buildProfileImage() {
+    if (_currentUser?.profileImage != null && _currentUser!.profileImage.isNotEmpty) {
+      final imageFile = File(_currentUser!.profileImage);
+      
+      // Check if file exists
+      if (imageFile.existsSync()) {
+        return Image.file(
+          imageFile,
+          fit: BoxFit.cover,
+          width: 100,
+          height: 100,
+          errorBuilder: (context, error, stackTrace) {
+            print('❌ Error loading profile image: $error');
+            return _buildDefaultAvatar();
+          },
+        );
+      } else {
+        print('⚠️ Profile image file not found: ${_currentUser!.profileImage}');
+        return _buildDefaultAvatar();
+      }
+    } else {
+      return _buildDefaultAvatar();
+    }
+  }
+
   Widget _buildDefaultAvatar() {
     return Container(
+      width: 100,
+      height: 100,
       color: Colors.grey[200],
       child: Icon(
         Icons.person,
@@ -928,6 +1288,7 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  /// IMPROVED: Location section with real data and better UX
   Widget _buildLocationSection() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -971,9 +1332,10 @@ class _ProfilePageState extends State<ProfilePage>
               else
                 IconButton(
                   icon: Icon(Icons.refresh, color: Colors.green[600], size: 20),
-                  onPressed: _getCurrentLocation,
+                  onPressed: _refreshLocation,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Refresh lokasi',
                 ),
             ],
           ),
@@ -1106,7 +1468,6 @@ class _ProfilePageState extends State<ProfilePage>
           const SizedBox(height: 16),
           
           _buildMenuCard([
-            // FIXED: Add Map menu item
             _buildMenuItem(
               'Peta Camping',
               'Temukan spot camping dan navigasi',
